@@ -37,31 +37,23 @@
 #include <stack/staticnet.h>
 
 /**
-	@brief Swap bytes in multi-byte fields from network to host byte ordering
+	@brief Swap bytes in multi-byte fields between network and host byte ordering
 
 	Assumes host is little endian.
  */
 void EthernetFrame::ByteSwap()
 {
-	//Swap the outer ethertype
-	uint8_t outer_hi = m_buffer[ETHERNET_MAC_SIZE*2];
-	uint8_t outer_lo = m_buffer[ETHERNET_MAC_SIZE*2 + 1];
-	m_buffer[ETHERNET_MAC_SIZE*2] = outer_lo;
-	m_buffer[ETHERNET_MAC_SIZE*2 + 1] = outer_hi;
-
-	//VLAN tagged
-	if( (outer_lo == (ETHERTYPE_DOT1Q >> 8)) && (outer_hi == (ETHERTYPE_DOT1Q & 0xff) ) )
+	//Swap VLAN tag if present
+	uint16_t& outer = OuterEthertype();
+	if(outer == ETHERTYPE_DOT1Q)
 	{
-		//Swap the 802.1q tag
-		uint8_t tag_hi = m_buffer[ETHERNET_MAC_SIZE*2 + 2];
-		uint8_t tag_lo = m_buffer[ETHERNET_MAC_SIZE*2 + 3];
-		m_buffer[ETHERNET_MAC_SIZE*2 + 2] = tag_lo;
-		m_buffer[ETHERNET_MAC_SIZE*2 + 3] = tag_hi;
+		uint16_t& inner = InnerEthertype();
+		inner = __builtin_bswap16(inner);
 
-		//Swap the inner ethertype
-		uint8_t inner_hi = m_buffer[ETHERNET_MAC_SIZE*2 + 4];
-		uint8_t inner_lo = m_buffer[ETHERNET_MAC_SIZE*2 + 5];
-		m_buffer[ETHERNET_MAC_SIZE*2 + 4] = inner_lo;
-		m_buffer[ETHERNET_MAC_SIZE*2 + 5] = inner_hi;
+		Dot1qTag& tag = VlanTag();
+		tag.m_word = __builtin_bswap16(tag.m_word);
 	}
+
+	//Swap outer ethertype after checking
+	outer = __builtin_bswap16(outer);
 }
