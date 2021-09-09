@@ -29,83 +29,43 @@
 
 /**
 	@file
-	@brief Declaration of EthernetInterface
+	@brief Declaration of EthernetInterfacePerformanceCounters
  */
 
-#ifndef EthernetInterface_h
-#define EthernetInterface_h
-
-#include "EthernetInterfacePerformanceCounters.h"
-
-/**
-	@brief Ethernet driver base class
- */
-class EthernetInterface
-{
-public:
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Transmit path
-
-	/**
-		@brief Gets a pointer to a buffer which can be filled with TX frame content.
-
-		The buffer is owned by the caller and must be returned to the driver by calling SendTxFrame() or
-		CancelTxFrame().
-	 */
-	virtual EthernetFrame* GetTxFrame() =0;
-
-	/**
-		@brief Sends a frame.
-
-		Ownership of the frame memory is transferred to the interface object, which may free it or return it to a DMA
-		queue depending on the implementation.
-	 */
-	virtual void SendTxFrame(EthernetFrame* frame) =0;
-
-	/**
-		@brief Cancels sending of an outbound frame.
-
-		Ownership of the frame memory is transferred to the interface object, which may free it or return it to a DMA
-		queue depending on the implementation.
-	 */
-	virtual void CancelTxFrame(EthernetFrame* frame) =0;
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Receive path
-
-	/**
-		@brief Returns the next frame in the receive buffer (or NULL if none is present).
-
-		This function is typically called after an interrupt reports that a frame is ready to process.
-
-		This buffer must be released by calling ReleaseRxFrame() upon completion of processing.
-	 */
-	virtual EthernetFrame* GetRxFrame() =0;
-
-	/**
-		@brief Notifies the driver that we are done with an inbound frame.
-
-		Ownership of the frame memory is transferred to the interface object, which may free it or return it to a DMA
-		queue depending on the implementation.
-	 */
-	virtual void ReleaseRxFrame(EthernetFrame* frame) =0;
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Performance counters
+#ifndef EthernetInterfacePerformanceCounters_h
+#define EthernetInterfacePerformanceCounters_h
 
 #ifdef STATICNET_PERFORMANCE_COUNTERS
 
-	///@brief Gets the performance counter data for this interface
-	const EthernetInterfacePerformanceCounters& PerfCounters()
-	{ return m_perfCounters; }
+/**
+	@brief Performance counters for an Ethernet interface
+ */
+class EthernetInterfacePerformanceCounters
+{
+public:
 
-protected:
+	///@brief Total number of frames transmitted
+	uint32_t	m_txFramesTotal;
 
-	///@brief Performance counters
-	EthernetInterfacePerformanceCounters m_perfCounters;
+	///@brief Total number of bytes transmitted, including headers but not preamble or FCS
+	uint32_t	m_txBytesTotal;
+
+	///@brief Number of incoming frames dropped due to FCS errors
+	uint32_t	m_rxFramesDroppedCRC;
+
+	///@brief Number of incoming frames dropped due to insufficient buffer space
+	uint32_t	m_rxFramesDroppedBuffer;
+
+	///@brief Number of incoming valid unicast frames received
+	uint32_t	m_rxFramesUnicast;
+
+	///@brief Number of incoming valid multicast/broadcast frames received
+	uint32_t	m_rxFramesMulticast;
+
+	///@brief Number of incoming bytes (valid frames only), including headers but not preamble or FCS
+	uint32_t	m_rxBytesTotal;
+};
 
 #endif
-};
 
 #endif

@@ -41,4 +41,7 @@
 ///@brief Define this to zeroize all frame buffers between uses
 #define ZEROIZE_BUFFERS_BEFORE_USE
 
+///@brief Define this to enable performance counters
+#define STATICNET_PERFORMANCE_COUNTERS
+
 #endif

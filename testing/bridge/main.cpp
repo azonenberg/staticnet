@@ -33,6 +33,7 @@
 
 int main(int /*argc*/, char* /*argv*/[])
 {
+	/*
 	uint8_t src[6] = {0x41, 0xde, 0xad, 0xbe, 0xef, 0x41 };
 	uint8_t dst[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 
@@ -59,6 +60,6 @@ int main(int /*argc*/, char* /*argv*/[])
 			printf("\n");
 	}
 	printf("\n");
-
+*/
 	return 0;
 }
