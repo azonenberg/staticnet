@@ -35,7 +35,9 @@
 #ifndef EthernetFrame_h
 #define EthernetFrame_h
 
+#include "EthernetCommon.h"
 #include "Dot1qTag.h"
+#include "MACAddress.h"
 
 /**
 	@brief A single Ethernet frame, including helpers for reading and writing various fields

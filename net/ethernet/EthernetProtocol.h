@@ -36,17 +36,36 @@
 #define EthernetProtocol_h
 
 #include "EthernetCommon.h"
-#include "MACAddress.h"
-#include "EthernetFrame.h"
+#include "../../drivers/base/EthernetInterface.h"
+
+class ARPProtocol;
 
 /**
-	@brief Ethernet protocol logic
+	@brief Ethernet protocol handling
 
 	One instance of this class must be declared for each physical Ethernet interface on the system.
  */
 class EthernetProtocol
 {
 public:
+
+	EthernetProtocol(EthernetInterface& iface, MACAddress our_mac);
+
+	void OnRxFrame(EthernetFrame* frame);
+
+	void UseARP(ARPProtocol* arp)
+	{ m_arp = arp; }
+
+protected:
+
+	///@brief Driver for the Ethernet MAC
+	EthernetInterface& m_iface;
+
+	///@brief Our MAC address
+	MACAddress m_mac;
+
+	//The ARP protocol stack for this port (if present)
+	ARPProtocol* m_arp;
 };
 
 #endif

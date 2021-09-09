@@ -43,6 +43,16 @@
 class EthernetInterfacePerformanceCounters
 {
 public:
+	EthernetInterfacePerformanceCounters()
+	: m_txFramesTotal(0)
+	, m_txBytesTotal(0)
+	, m_rxFramesDroppedCRC(0)
+	, m_rxFramesDroppedBuffer(0)
+	, m_rxFramesUnicast(0)
+	, m_rxFramesMulticast(0)
+	, m_rxBytesTotal(0)
+	{
+	}
 
 	///@brief Total number of frames transmitted
 	uint32_t	m_txFramesTotal;

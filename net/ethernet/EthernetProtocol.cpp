@@ -27,81 +27,87 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of MACAddress
- */
+#include <stdio.h>
 
-#ifndef MACAddress_h
-#define MACAddress_h
+#include <staticnet-config.h>
+#include <stack/staticnet.h>
 
-///@brief Size of an Ethernet MAC address
-#define ETHERNET_MAC_SIZE 6
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Construction / destruction
 
 /**
-	@brief A 48-bit Ethernet MAC address
-
-	Can be seamlessly casted to/from uint8[6].
+	@brief Initializes the Ethernet protocol stack
  */
-class MACAddress
+EthernetProtocol::EthernetProtocol(EthernetInterface& iface, MACAddress our_mac)
+	: m_iface(iface)
+	, m_mac(our_mac)
+	, m_arp(NULL)
 {
-public:
 
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Comparison operators
+}
 
-	bool operator!= (const MACAddress& rhs) const
-	{ return 0 != memcmp(m_address, rhs.m_address, ETHERNET_MAC_SIZE); }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Incoming frame processing
 
-	bool operator== (const MACAddress& rhs) const
-	{ return 0 == memcmp(m_address, rhs.m_address, ETHERNET_MAC_SIZE); }
-
-	bool operator!= (uint8_t* rhs) const
-	{ return 0 != memcmp(m_address, rhs, ETHERNET_MAC_SIZE); }
-
-	bool operator== (uint8_t* rhs) const
-	{ return 0 == memcmp(m_address, rhs, ETHERNET_MAC_SIZE); }
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Helpers for checking special bits
-
-	///@brief Returns true if this is a unicast address, false otherwise
-	bool IsUnicast() const
-	{ return (m_address[0] & 1) == 0; }
-
-	///@brief Returns true if this is a multicast address, false otherwise
-	bool IsMulticast() const
-	{ return (m_address[0] & 1) == 1; }
-
-	///@brief Returns true if this is a locally administered address, false otherwise
-	bool IsLocallyAdministered() const
-	{ return (m_address[0] & 2) == 2; }
-
-	///@brief Returns true if this is a universally administered address, false otherwise
-	bool IsUniversallyAdministered() const
-	{ return (m_address[0] & 2) == 0; }
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Raw field access
-
-	///@brief Bounds checked indexing operator
-	uint8_t& operator[](uint8_t index)
+void EthernetProtocol::OnRxFrame(EthernetFrame* frame)
+{
+	//Discard anything that's not a broadcast or sent to us
+	//TODO: promiscuous mode
+	auto& dst = frame->DstMAC();
+	if( (dst != m_mac) && !dst.IsMulticast())
 	{
-		if(index >= ETHERNET_MAC_SIZE)
-			return m_address[ETHERNET_MAC_SIZE-1];
-		return m_address[index];
+		printf("    Ignoring dest MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
+			dst[0], dst[1], dst[2], dst[3], dst[4], dst[5]);
+		m_iface.ReleaseRxFrame(frame);
+		return;
 	}
 
-	///@brief Bounds checked indexing operator
-	const uint8_t& operator[](uint8_t index) const
+	//Byte swap header fields
+	frame->ByteSwap();
+
+	//TODO: VLAN processing
+	//For now, ignore VLAN tags
+
+	//Send to appropriate upper layer stack
+	auto& ethertype = frame->InnerEthertype();
+	if(ethertype <= 1500)
 	{
-		if(index >= ETHERNET_MAC_SIZE)
-			return m_address[ETHERNET_MAC_SIZE-1];
-		return m_address[index];
+		printf("Got LLC frame, ignoring...\n");
+	}
+	switch(ethertype)
+	{
+		//Process ARP frames if we have an attached ARP stack and the frame is big enough to hold a full ARP packet
+		case ETHERTYPE_ARP:
+			if(m_arp && (frame->Length() >= sizeof(ARPPacket)) )
+				m_arp->OnRxPacket(reinterpret_cast<ARPPacket*>(frame->Payload()));
+			break;
+
+		//TODO: IPv4
+		case ETHERTYPE_IPV4:
+			break;
+
+		//TODO: IPv6
+		case ETHERTYPE_IPV6:
+			break;
+
+		default:
+			printf("Got frame with unrecognized Ethertype 0x%04x, ignoring...\n", ethertype);
+			break;
 	}
 
-public:
-	uint8_t m_address[ETHERNET_MAC_SIZE];
-};
+	/*
+	printf("Ethertype: 0x%04x\n", ethertype);
 
-#endif
+	printf("    ");
+	auto len = frame->Length();
+	for(size_t i=0; i<len; i++)
+	{
+		printf("%02x ", frame->RawData()[i]);
+		if( (i & 31) == 31)
+			printf("\n    ");
+	}
+	printf("\n");
+	*/
+
+	m_iface.ReleaseRxFrame(frame);
+}

@@ -4,7 +4,13 @@ include_directories(.)
 ###############################################################################
 #C++ compilation
 add_executable(bridge
+	../../drivers/base/EthernetInterface.cpp
+	../../drivers/tap/TapEthernetInterface.cpp
+
+	../../net/arp/ARPPacket.cpp
+	../../net/arp/ARPProtocol.cpp
 	../../net/ethernet/EthernetFrame.cpp
+	../../net/ethernet/EthernetProtocol.cpp
 
 	main.cpp
 )

@@ -29,79 +29,41 @@
 
 /**
 	@file
-	@brief Declaration of MACAddress
+	@brief Declaration of ARPPacket
  */
 
-#ifndef MACAddress_h
-#define MACAddress_h
+#ifndef ARPPacket_h
+#define ARPPacket_h
 
-///@brief Size of an Ethernet MAC address
-#define ETHERNET_MAC_SIZE 6
+#include "../ethernet/MACAddress.h"
+#include "../ipv4/IPv4Address.h"
 
 /**
-	@brief A 48-bit Ethernet MAC address
+	@brief An ARP packet sent over Ethernet
 
-	Can be seamlessly casted to/from uint8[6].
+	There's no need for helper methods to access fields (as is the case with Ethernet) because packets are fixed format.
  */
-class MACAddress
+class __attribute__((packed)) ARPPacket
 {
 public:
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Comparison operators
+	// Byte ordering correction
 
-	bool operator!= (const MACAddress& rhs) const
-	{ return 0 != memcmp(m_address, rhs.m_address, ETHERNET_MAC_SIZE); }
-
-	bool operator== (const MACAddress& rhs) const
-	{ return 0 == memcmp(m_address, rhs.m_address, ETHERNET_MAC_SIZE); }
-
-	bool operator!= (uint8_t* rhs) const
-	{ return 0 != memcmp(m_address, rhs, ETHERNET_MAC_SIZE); }
-
-	bool operator== (uint8_t* rhs) const
-	{ return 0 == memcmp(m_address, rhs, ETHERNET_MAC_SIZE); }
+	void ByteSwap();
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Helpers for checking special bits
+	// Data members
 
-	///@brief Returns true if this is a unicast address, false otherwise
-	bool IsUnicast() const
-	{ return (m_address[0] & 1) == 0; }
-
-	///@brief Returns true if this is a multicast address, false otherwise
-	bool IsMulticast() const
-	{ return (m_address[0] & 1) == 1; }
-
-	///@brief Returns true if this is a locally administered address, false otherwise
-	bool IsLocallyAdministered() const
-	{ return (m_address[0] & 2) == 2; }
-
-	///@brief Returns true if this is a universally administered address, false otherwise
-	bool IsUniversallyAdministered() const
-	{ return (m_address[0] & 2) == 0; }
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Raw field access
-
-	///@brief Bounds checked indexing operator
-	uint8_t& operator[](uint8_t index)
-	{
-		if(index >= ETHERNET_MAC_SIZE)
-			return m_address[ETHERNET_MAC_SIZE-1];
-		return m_address[index];
-	}
-
-	///@brief Bounds checked indexing operator
-	const uint8_t& operator[](uint8_t index) const
-	{
-		if(index >= ETHERNET_MAC_SIZE)
-			return m_address[ETHERNET_MAC_SIZE-1];
-		return m_address[index];
-	}
-
-public:
-	uint8_t m_address[ETHERNET_MAC_SIZE];
+	uint16_t m_htype;		//always 1
+	uint16_t m_ptype;		//always ETHERTYPE_IPv4
+	uint8_t m_hardwareLen;	//always 6
+	uint8_t m_protoLen;		//always 4
+	uint16_t m_oper;
+	MACAddress m_senderHardwareAddress;
+	IPv4Address m_senderProtocolAddress;
+	MACAddress m_targetHardwareAddress;
+	IPv4Address m_targetProtocolAddress;
 };
 
 #endif

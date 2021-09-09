@@ -54,8 +54,13 @@
 #define ETHERNET_BUFFER_SIZE (ETHERNET_HEADER_SIZE + ETHERNET_DOT1Q_SIZE + ETHERNET_PAYLOAD_MTU)
 
 
-
-///@brief Outer ethertype for a frame with VLAN tag
-#define ETHERTYPE_DOT1Q 0x8100
+///@brief Known ethertypes
+enum ethertype_t
+{
+	ETHERTYPE_IPV4	= 0x0800,
+	ETHERTYPE_ARP	= 0x0806,
+	ETHERTYPE_DOT1Q = 0x8100,
+	ETHERTYPE_IPV6	= 0x86dd
+};
 
 #endif

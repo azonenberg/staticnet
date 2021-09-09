@@ -40,8 +40,6 @@
  */
 union Dot1qTag
 {
-public:
-
 	struct __attribute__((packed))
 	{
 		unsigned int m_vlanID:12;

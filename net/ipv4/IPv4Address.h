@@ -29,79 +29,21 @@
 
 /**
 	@file
-	@brief Declaration of MACAddress
+	@brief Declaration of IPv4Address
  */
 
-#ifndef MACAddress_h
-#define MACAddress_h
+#ifndef IPv4Address_h
+#define IPv4Address_h
 
-///@brief Size of an Ethernet MAC address
-#define ETHERNET_MAC_SIZE 6
+#define IPV4_ADDR_SIZE 4
 
 /**
-	@brief A 48-bit Ethernet MAC address
-
-	Can be seamlessly casted to/from uint8[6].
+	@brief An IPv4 address
  */
-class MACAddress
+union IPv4Address
 {
-public:
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Comparison operators
-
-	bool operator!= (const MACAddress& rhs) const
-	{ return 0 != memcmp(m_address, rhs.m_address, ETHERNET_MAC_SIZE); }
-
-	bool operator== (const MACAddress& rhs) const
-	{ return 0 == memcmp(m_address, rhs.m_address, ETHERNET_MAC_SIZE); }
-
-	bool operator!= (uint8_t* rhs) const
-	{ return 0 != memcmp(m_address, rhs, ETHERNET_MAC_SIZE); }
-
-	bool operator== (uint8_t* rhs) const
-	{ return 0 == memcmp(m_address, rhs, ETHERNET_MAC_SIZE); }
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Helpers for checking special bits
-
-	///@brief Returns true if this is a unicast address, false otherwise
-	bool IsUnicast() const
-	{ return (m_address[0] & 1) == 0; }
-
-	///@brief Returns true if this is a multicast address, false otherwise
-	bool IsMulticast() const
-	{ return (m_address[0] & 1) == 1; }
-
-	///@brief Returns true if this is a locally administered address, false otherwise
-	bool IsLocallyAdministered() const
-	{ return (m_address[0] & 2) == 2; }
-
-	///@brief Returns true if this is a universally administered address, false otherwise
-	bool IsUniversallyAdministered() const
-	{ return (m_address[0] & 2) == 0; }
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Raw field access
-
-	///@brief Bounds checked indexing operator
-	uint8_t& operator[](uint8_t index)
-	{
-		if(index >= ETHERNET_MAC_SIZE)
-			return m_address[ETHERNET_MAC_SIZE-1];
-		return m_address[index];
-	}
-
-	///@brief Bounds checked indexing operator
-	const uint8_t& operator[](uint8_t index) const
-	{
-		if(index >= ETHERNET_MAC_SIZE)
-			return m_address[ETHERNET_MAC_SIZE-1];
-		return m_address[index];
-	}
-
-public:
-	uint8_t m_address[ETHERNET_MAC_SIZE];
+	uint8_t m_octets[IPV4_ADDR_SIZE];
+	uint32_t m_word;
 };
 
 #endif

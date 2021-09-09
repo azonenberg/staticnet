@@ -27,81 +27,77 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of MACAddress
- */
+#include <stdio.h>
 
-#ifndef MACAddress_h
-#define MACAddress_h
+#include <staticnet-config.h>
+#include <stack/staticnet.h>
 
-///@brief Size of an Ethernet MAC address
-#define ETHERNET_MAC_SIZE 6
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Construction / destruction
 
 /**
-	@brief A 48-bit Ethernet MAC address
-
-	Can be seamlessly casted to/from uint8[6].
+	@brief Initializes the ARP protocol stack
  */
-class MACAddress
+ARPProtocol::ARPProtocol(EthernetProtocol& eth)
+	: m_eth(eth)
 {
-public:
 
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Comparison operators
+}
 
-	bool operator!= (const MACAddress& rhs) const
-	{ return 0 != memcmp(m_address, rhs.m_address, ETHERNET_MAC_SIZE); }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Handler for incoming packets
 
-	bool operator== (const MACAddress& rhs) const
-	{ return 0 == memcmp(m_address, rhs.m_address, ETHERNET_MAC_SIZE); }
+void ARPProtocol::OnRxPacket(ARPPacket* packet)
+{
+	packet->ByteSwap();
 
-	bool operator!= (uint8_t* rhs) const
-	{ return 0 != memcmp(m_address, rhs, ETHERNET_MAC_SIZE); }
+	printf("Got an ARP packet!\n");
 
-	bool operator== (uint8_t* rhs) const
-	{ return 0 == memcmp(m_address, rhs, ETHERNET_MAC_SIZE); }
+	//Validate all of our common fields
+	if(packet->m_htype != 1)
+		return;
+	if(packet->m_ptype != ETHERTYPE_IPV4)
+		return;
+	if(packet->m_hardwareLen != ETHERNET_MAC_SIZE)
+		return;
+	if(packet->m_protoLen != IPV4_ADDR_SIZE)
+		return;
 
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Helpers for checking special bits
+	printf("    Sender hardware: %02x:%02x:%02x:%02x:%02x:%02x\n",
+		packet->m_senderHardwareAddress[0],
+		packet->m_senderHardwareAddress[1],
+		packet->m_senderHardwareAddress[2],
+		packet->m_senderHardwareAddress[3],
+		packet->m_senderHardwareAddress[4],
+		packet->m_senderHardwareAddress[5]);
+	printf("    Sender protocol: %d.%d.%d.%d\n",
+		packet->m_senderProtocolAddress.m_octets[0],
+		packet->m_senderProtocolAddress.m_octets[1],
+		packet->m_senderProtocolAddress.m_octets[2],
+		packet->m_senderProtocolAddress.m_octets[3]);
 
-	///@brief Returns true if this is a unicast address, false otherwise
-	bool IsUnicast() const
-	{ return (m_address[0] & 1) == 0; }
+	printf("    Target hardware: %02x:%02x:%02x:%02x:%02x:%02x\n",
+		packet->m_targetHardwareAddress[0],
+		packet->m_targetHardwareAddress[1],
+		packet->m_targetHardwareAddress[2],
+		packet->m_targetHardwareAddress[3],
+		packet->m_targetHardwareAddress[4],
+		packet->m_targetHardwareAddress[5]);
+	printf("    Target protocol: %d.%d.%d.%d\n",
+		packet->m_targetProtocolAddress.m_octets[0],
+		packet->m_targetProtocolAddress.m_octets[1],
+		packet->m_targetProtocolAddress.m_octets[2],
+		packet->m_targetProtocolAddress.m_octets[3]);
 
-	///@brief Returns true if this is a multicast address, false otherwise
-	bool IsMulticast() const
-	{ return (m_address[0] & 1) == 1; }
-
-	///@brief Returns true if this is a locally administered address, false otherwise
-	bool IsLocallyAdministered() const
-	{ return (m_address[0] & 2) == 2; }
-
-	///@brief Returns true if this is a universally administered address, false otherwise
-	bool IsUniversallyAdministered() const
-	{ return (m_address[0] & 2) == 0; }
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Raw field access
-
-	///@brief Bounds checked indexing operator
-	uint8_t& operator[](uint8_t index)
+	/*
+	printf("    ");
+	auto len = frame->Length();
+	for(size_t i=0; i<len; i++)
 	{
-		if(index >= ETHERNET_MAC_SIZE)
-			return m_address[ETHERNET_MAC_SIZE-1];
-		return m_address[index];
+		printf("%02x ", frame->RawData()[i]);
+		if( (i & 31) == 31)
+			printf("\n    ");
 	}
-
-	///@brief Bounds checked indexing operator
-	const uint8_t& operator[](uint8_t index) const
-	{
-		if(index >= ETHERNET_MAC_SIZE)
-			return m_address[ETHERNET_MAC_SIZE-1];
-		return m_address[index];
-	}
-
-public:
-	uint8_t m_address[ETHERNET_MAC_SIZE];
-};
-
-#endif
+	printf("\n");
+	*/
+}

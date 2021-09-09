@@ -27,81 +27,102 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of MACAddress
- */
+#include <staticnet-config.h>
+#include <stack/staticnet.h>
+#include "TapEthernetInterface.h"
 
-#ifndef MACAddress_h
-#define MACAddress_h
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <linux/if.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
+#include <linux/if_tun.h>
+#include <string.h>
+#include <thread>
+#include <sys/signal.h>
 
-///@brief Size of an Ethernet MAC address
-#define ETHERNET_MAC_SIZE 6
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Construction / destruction
 
-/**
-	@brief A 48-bit Ethernet MAC address
-
-	Can be seamlessly casted to/from uint8[6].
- */
-class MACAddress
+TapEthernetInterface::TapEthernetInterface(const char* name)
 {
-public:
+	signal(SIGPIPE, SIG_IGN);
 
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Comparison operators
-
-	bool operator!= (const MACAddress& rhs) const
-	{ return 0 != memcmp(m_address, rhs.m_address, ETHERNET_MAC_SIZE); }
-
-	bool operator== (const MACAddress& rhs) const
-	{ return 0 == memcmp(m_address, rhs.m_address, ETHERNET_MAC_SIZE); }
-
-	bool operator!= (uint8_t* rhs) const
-	{ return 0 != memcmp(m_address, rhs, ETHERNET_MAC_SIZE); }
-
-	bool operator== (uint8_t* rhs) const
-	{ return 0 == memcmp(m_address, rhs, ETHERNET_MAC_SIZE); }
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Helpers for checking special bits
-
-	///@brief Returns true if this is a unicast address, false otherwise
-	bool IsUnicast() const
-	{ return (m_address[0] & 1) == 0; }
-
-	///@brief Returns true if this is a multicast address, false otherwise
-	bool IsMulticast() const
-	{ return (m_address[0] & 1) == 1; }
-
-	///@brief Returns true if this is a locally administered address, false otherwise
-	bool IsLocallyAdministered() const
-	{ return (m_address[0] & 2) == 2; }
-
-	///@brief Returns true if this is a universally administered address, false otherwise
-	bool IsUniversallyAdministered() const
-	{ return (m_address[0] & 2) == 0; }
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Raw field access
-
-	///@brief Bounds checked indexing operator
-	uint8_t& operator[](uint8_t index)
+	//Open the tap handle
+	m_hTun = open("/dev/net/tun", O_RDWR | O_NONBLOCK);
+	if(m_hTun < 0)
 	{
-		if(index >= ETHERNET_MAC_SIZE)
-			return m_address[ETHERNET_MAC_SIZE-1];
-		return m_address[index];
+		perror("open tun");
+		abort();
 	}
 
-	///@brief Bounds checked indexing operator
-	const uint8_t& operator[](uint8_t index) const
+	//Configure and name it
+	ifreq ifr;
+	memset(&ifr, 0, sizeof(ifr));
+	ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
+	strncpy(ifr.ifr_name, name, IFNAMSIZ);
+	if(ioctl(m_hTun, TUNSETIFF, &ifr) < 0)
 	{
-		if(index >= ETHERNET_MAC_SIZE)
-			return m_address[ETHERNET_MAC_SIZE-1];
-		return m_address[index];
+		close(m_hTun);
+		perror("TUNSETIFF");
+		abort();
+	}
+}
+
+TapEthernetInterface::~TapEthernetInterface()
+{
+	close(m_hTun);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Transmit path
+
+EthernetFrame* TapEthernetInterface::GetTxFrame()
+{
+	return NULL;
+}
+
+void TapEthernetInterface::SendTxFrame(EthernetFrame* frame)
+{
+}
+
+void TapEthernetInterface::CancelTxFrame(EthernetFrame* frame)
+{
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Receive path
+
+EthernetFrame* TapEthernetInterface::GetRxFrame()
+{
+	EthernetFrame* frame = new EthernetFrame;
+	int len = read(m_hTun,  frame->RawData(), ETHERNET_BUFFER_SIZE);
+
+	if(len <= 0)
+	{
+		delete frame;
+		return NULL;
 	}
 
-public:
-	uint8_t m_address[ETHERNET_MAC_SIZE];
-};
+	else
+	{
+		#ifdef STATICNET_PERFORMANCE_COUNTERS
 
-#endif
+			if(frame->DstMAC().IsUnicast())
+				m_perfCounters.m_rxFramesUnicast ++;
+			else
+				m_perfCounters.m_rxFramesMulticast ++;
+			m_perfCounters.m_rxBytesTotal += len;
+
+		#endif
+
+		frame->Length() = len;
+		return frame;
+	}
+}
+
+void TapEthernetInterface::ReleaseRxFrame(EthernetFrame* frame)
+{
+	delete frame;
+}

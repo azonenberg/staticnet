@@ -42,7 +42,8 @@
 #include <stdint.h>
 #include <memory.h>
 
-#include "../net/ethernet/EthernetProtocol.h"
 #include "../drivers/base/EthernetInterface.h"
+#include "../net/ethernet/EthernetProtocol.h"
+#include "../net/arp/ARPProtocol.h"
 
 #endif

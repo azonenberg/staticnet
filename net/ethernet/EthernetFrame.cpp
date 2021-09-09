@@ -31,8 +31,6 @@
 	@file
 	@brief Implementation of EthernetFrame non-inline functions
  */
-#include <stdio.h>
-
 #include <staticnet-config.h>
 #include <stack/staticnet.h>
 

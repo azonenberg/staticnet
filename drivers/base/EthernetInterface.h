@@ -35,6 +35,7 @@
 #ifndef EthernetInterface_h
 #define EthernetInterface_h
 
+#include "../../net/ethernet/EthernetFrame.h"
 #include "EthernetInterfacePerformanceCounters.h"
 
 /**
@@ -43,6 +44,7 @@
 class EthernetInterface
 {
 public:
+	virtual ~EthernetInterface();
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Transmit path

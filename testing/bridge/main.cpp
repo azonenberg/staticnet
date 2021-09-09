@@ -27,39 +27,32 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
+#include <unistd.h>
 #include <stdio.h>
 #include <staticnet-config.h>
 #include <stack/staticnet.h>
+#include <drivers/tap/TapEthernetInterface.h>
 
 int main(int /*argc*/, char* /*argv*/[])
 {
-	/*
-	uint8_t src[6] = {0x41, 0xde, 0xad, 0xbe, 0xef, 0x41 };
-	uint8_t dst[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+	//Bring up the tap interface
+	TapEthernetInterface iface("simtap");
 
-	//Build the frame
-	EthernetFrame frame;
-	frame.SrcMAC() = MACAddress(src);
-	frame.DstMAC() = MACAddress(dst);
-	frame.OuterEthertype() = ETHERTYPE_DOT1Q;
-	frame.VlanTag().m_fields.m_vlanID = 12;
-	frame.VlanTag().m_fields.m_dropEligible = 0;
-	frame.VlanTag().m_fields.m_priorityCodePoint = 0;
-	frame.InnerEthertype() = 0x86dd;
-	frame.Payload()[0] = 0x69;
-	frame.Length() = ETHERNET_HEADER_SIZE + ETHERNET_DOT1Q_SIZE + 1;
+	//Create an Ethernet protocol stack for the interface
+	MACAddress mac = {{ 0x02, 0xde, 0xad, 0xbe, 0xef, 0x41 }};
+	EthernetProtocol eth(iface, mac);
 
-	//Convert all fields to network byte order
-	frame.ByteSwap();
+	//Create an ARP protocol stack for the interface
+	ARPProtocol arp(eth);
+	eth.UseARP(&arp);
 
-	auto len = frame.Length();
-	for(size_t i=0; i<len; i++)
+	//Main event handling loop
+	while(true)
 	{
-		printf("%02x ", frame.RawData()[i]);
-		if( (i & 15) == 15)
-			printf("\n");
+		auto frame = iface.GetRxFrame();
+		if(frame)
+			eth.OnRxFrame(frame);
 	}
-	printf("\n");
-*/
+
 	return 0;
 }
