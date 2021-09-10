@@ -29,45 +29,61 @@
 
 /**
 	@file
-	@brief Declaration of ARPProtocol
+	@brief Declaration of ARPCache
  */
 
-#ifndef ARPProtocol_h
-#define ARPProtocol_h
+#ifndef ARPCache_h
+#define ARPCache_h
 
-#include "../ethernet/EthernetProtocol.h"
-#include "ARPPacket.h"
-#include "ARPCache.h"
+#include "../ipv4/IPv4Address.h"
+#include "../ethernet/MACAddress.h"
 
 /**
-	@brief ARP protocol logic for a single physical interface
+	@brief A single entry in an ARP cache
  */
-class ARPProtocol
+class ARPCacheEntry
 {
 public:
-	ARPProtocol(EthernetProtocol& eth, IPv4Address& ip, ARPCache& cache);
+	ARPCacheEntry()
+	: m_valid(false)
+	{}
 
-	void OnRxPacket(ARPPacket* packet);
+	bool m_valid;
+	IPv4Address m_ip;
+	MACAddress m_mac;
+};
 
-	enum
-	{
-		ARP_REQUEST = 1,
-		ARP_REPLY = 2
-	};
+/**
+	@brief A single bank of the ARP cache (direct mapped)
+ */
+class ARPCacheWay
+{
+public:
+	ARPCacheEntry m_lines[ARP_CACHE_LINES];
+};
+
+/**
+	@brief The ARP cache
+ */
+class ARPCache
+{
+public:
+	ARPCache();
+
+	bool Lookup(MACAddress& mac, IPv4Address ip);
+	void Insert(MACAddress& mac, IPv4Address ip);
+
+	//TODO: aging
 
 protected:
 
-	void OnRequestPacket(ARPPacket* packet);
-	void OnReplyPacket(ARPPacket* packet);
+	///@brief The actual cache data
+	ARPCacheWay m_ways[ARP_CACHE_WAYS];
 
-	///The Ethernet protocol stack
-	EthernetProtocol& m_eth;
+	//@brief Cache way to evict next time there's contention for space
+	size_t m_nextWayToEvict;
 
-	///Our local IP address
-	IPv4Address& m_ip;
-
-	///Cache for storing IP -> MAC associations
-	ARPCache& m_cache;
+	size_t Hash(IPv4Address ip);
 };
 
 #endif

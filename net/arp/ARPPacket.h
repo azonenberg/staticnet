@@ -57,8 +57,8 @@ public:
 
 	uint16_t m_htype;		//always 1
 	uint16_t m_ptype;		//always ETHERTYPE_IPv4
-	uint8_t m_hardwareLen;	//always 6
-	uint8_t m_protoLen;		//always 4
+	uint8_t m_hardwareLen;	//always ETHERNET_MAC_SIZE
+	uint8_t m_protoLen;		//always IPV4_ADDR_SIZE
 	uint16_t m_oper;
 	MACAddress m_senderHardwareAddress;
 	IPv4Address m_senderProtocolAddress;

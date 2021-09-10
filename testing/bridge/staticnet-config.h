@@ -44,4 +44,10 @@
 ///@brief Define this to enable performance counters
 #define STATICNET_PERFORMANCE_COUNTERS
 
+///@brief Number of ways of associativity for the ARP cache
+#define ARP_CACHE_WAYS 4
+
+///@brief Number of lines per set ion the ARP cache
+#define ARP_CACHE_LINES 256
+
 #endif

@@ -42,8 +42,12 @@ int main(int /*argc*/, char* /*argv*/[])
 	MACAddress mac = {{ 0x02, 0xde, 0xad, 0xbe, 0xef, 0x41 }};
 	EthernetProtocol eth(iface, mac);
 
+	//ARP cache (shared by all interfaces)
+	ARPCache cache;
+
 	//Create an ARP protocol stack for the interface
-	ARPProtocol arp(eth);
+	IPv4Address ip4 = { .m_octets{192, 168, 1, 2} };
+	ARPProtocol arp(eth, ip4, cache);
 	eth.UseARP(&arp);
 
 	//Main event handling loop

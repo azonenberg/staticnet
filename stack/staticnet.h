@@ -45,5 +45,6 @@
 #include "../drivers/base/EthernetInterface.h"
 #include "../net/ethernet/EthernetProtocol.h"
 #include "../net/arp/ARPProtocol.h"
+#include "../net/ipv4/IPv4Protocol.h"
 
 #endif

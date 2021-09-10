@@ -38,8 +38,10 @@
 /**
 	@brief Initializes the ARP protocol stack
  */
-ARPProtocol::ARPProtocol(EthernetProtocol& eth)
+ARPProtocol::ARPProtocol(EthernetProtocol& eth, IPv4Address& ip, ARPCache& cache)
 	: m_eth(eth)
+	, m_ip(ip)
+	, m_cache(cache)
 {
 
 }
@@ -47,11 +49,12 @@ ARPProtocol::ARPProtocol(EthernetProtocol& eth)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Handler for incoming packets
 
+/**
+	@brief Handle an incoming ARP packet
+ */
 void ARPProtocol::OnRxPacket(ARPPacket* packet)
 {
 	packet->ByteSwap();
-
-	printf("Got an ARP packet!\n");
 
 	//Validate all of our common fields
 	if(packet->m_htype != 1)
@@ -62,6 +65,64 @@ void ARPProtocol::OnRxPacket(ARPPacket* packet)
 		return;
 	if(packet->m_protoLen != IPV4_ADDR_SIZE)
 		return;
+
+	switch(packet->m_oper)
+	{
+		case ARP_REQUEST:
+			OnRequestPacket(packet);
+			break;
+
+		case ARP_REPLY:
+			OnReplyPacket(packet);
+			break;
+
+		//malformed, ignore it
+		default:
+			break;
+	}
+}
+
+/**
+	@brief Handle an incoming ARP request
+ */
+void ARPProtocol::OnRequestPacket(ARPPacket* packet)
+{
+	//For a request, target hardware address is ignored because they don't know who we are
+	//Target protocol address must match our IP or we're not interested
+	if(packet->m_targetProtocolAddress != m_ip)
+		return;
+
+	//Add entry for sender to our ARP table if needed
+	m_cache.Insert(packet->m_senderHardwareAddress, packet->m_senderProtocolAddress);
+
+	//Prepare reply packet
+	auto frame = m_eth.GetTxFrame(ETHERTYPE_ARP, packet->m_senderHardwareAddress);
+	frame->SetPayloadLength(sizeof(ARPPacket));
+	ARPPacket* reply = reinterpret_cast<ARPPacket*>(frame->Payload());
+
+	//Format reply packet
+	reply->m_htype			= 1;
+	reply->m_ptype			= ETHERTYPE_IPV4;
+	reply->m_hardwareLen	= ETHERNET_MAC_SIZE;
+	reply->m_protoLen		= IPV4_ADDR_SIZE;
+	reply->m_oper			= ARP_REPLY;
+
+	reply->m_senderHardwareAddress = m_eth.GetMACAddress();
+	reply->m_senderProtocolAddress = m_ip;
+	reply->m_targetHardwareAddress = packet->m_senderHardwareAddress;
+	reply->m_targetProtocolAddress = packet->m_senderProtocolAddress;
+
+	//Swap endianness and send
+	reply->ByteSwap();
+	m_eth.SendTxFrame(frame);
+}
+
+/**
+	@brief Handle an incoming ARP reply
+ */
+void ARPProtocol::OnReplyPacket(ARPPacket* /*packet*/)
+{
+		/*
 
 	printf("    Sender hardware: %02x:%02x:%02x:%02x:%02x:%02x\n",
 		packet->m_senderHardwareAddress[0],
@@ -88,16 +149,5 @@ void ARPProtocol::OnRxPacket(ARPPacket* packet)
 		packet->m_targetProtocolAddress.m_octets[1],
 		packet->m_targetProtocolAddress.m_octets[2],
 		packet->m_targetProtocolAddress.m_octets[3]);
-
-	/*
-	printf("    ");
-	auto len = frame->Length();
-	for(size_t i=0; i<len; i++)
-	{
-		printf("%02x ", frame->RawData()[i]);
-		if( (i & 31) == 31)
-			printf("\n    ");
-	}
-	printf("\n");
 	*/
 }

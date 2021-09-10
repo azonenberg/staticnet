@@ -51,10 +51,26 @@ public:
 
 	EthernetProtocol(EthernetInterface& iface, MACAddress our_mac);
 
+	EthernetFrame* GetTxFrame(ethertype_t type, const MACAddress& dest);
+
+	///@brief Sends a frame to the driver
+	void SendTxFrame(EthernetFrame* frame)
+	{
+		frame->ByteSwap();
+		m_iface.SendTxFrame(frame);
+	}
+
+	///@brief Cancels sending of a frame
+	void CancelTxFrame(EthernetFrame* frame)
+	{ m_iface.CancelTxFrame(frame); }
+
 	void OnRxFrame(EthernetFrame* frame);
 
 	void UseARP(ARPProtocol* arp)
 	{ m_arp = arp; }
+
+	const MACAddress& GetMACAddress()
+	{ return m_mac; }
 
 protected:
 

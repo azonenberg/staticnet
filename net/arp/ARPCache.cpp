@@ -27,47 +27,110 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of ARPProtocol
- */
+#include <stdio.h>
 
-#ifndef ARPProtocol_h
-#define ARPProtocol_h
+#include <staticnet-config.h>
+#include <stack/staticnet.h>
 
-#include "../ethernet/EthernetProtocol.h"
-#include "ARPPacket.h"
-#include "ARPCache.h"
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Construction / destruction
 
-/**
-	@brief ARP protocol logic for a single physical interface
- */
-class ARPProtocol
+ARPCache::ARPCache()
+	: m_nextWayToEvict(0)
 {
-public:
-	ARPProtocol(EthernetProtocol& eth, IPv4Address& ip, ARPCache& cache);
+}
 
-	void OnRxPacket(ARPPacket* packet);
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Address hashing
 
-	enum
+/**
+	@brief Hashes an IP address and returns a row index
+
+	32-bit FNV-1 for now. Simple and good mixing, but uses a bunch of multiplies so might be slow?
+ */
+size_t ARPCache::Hash(IPv4Address ip)
+{
+	size_t hash = 0x811c9dc5;
+	for(size_t i=0; i<4; i++)
+		hash = (hash * 0x01000193) ^ ip.m_octets[i];
+
+	return hash % ARP_CACHE_LINES;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Cache operations
+
+/**
+	@brief Checks if the ARP cache contains an entry for a given IP, and looks up the corresponding MAC if so
+ */
+bool ARPCache::Lookup(MACAddress& mac, IPv4Address ip)
+{
+	size_t hash = Hash(ip);
+
+	for(size_t way=0; way < ARP_CACHE_WAYS; way++)
 	{
-		ARP_REQUEST = 1,
-		ARP_REPLY = 2
-	};
+		auto& row = m_ways[way].m_lines[hash];
+		if(row.m_valid && row.m_ip == ip)
+		{
+			mac = row.m_mac;
+			return true;
+		}
+	}
 
-protected:
+	return false;
+}
 
-	void OnRequestPacket(ARPPacket* packet);
-	void OnReplyPacket(ARPPacket* packet);
+/**
+	@brief Inserts a new entry into the ARP cache.
 
-	///The Ethernet protocol stack
-	EthernetProtocol& m_eth;
+	Calling this function if the entry is already present is a legal no-op.
+ */
+void ARPCache::Insert(MACAddress& mac, IPv4Address ip)
+{
+	size_t hash = Hash(ip);
 
-	///Our local IP address
-	IPv4Address& m_ip;
+	//Look for a free space or duplicate entry
+	bool foundEmpty = false;
+	size_t way = 0;
+	for(; way < ARP_CACHE_WAYS; way ++)
+	{
+		auto& row = m_ways[way].m_lines[hash];
 
-	///Cache for storing IP -> MAC associations
-	ARPCache& m_cache;
-};
+		//There's something in the row. We can't insert here.
+		if(row.m_valid)
+		{
+			//Does the row already have an entry for this IP? Update the MAC if needed, then we're done
+			if(row.m_ip == ip)
+			{
+				row.m_mac = mac;
+				return;
+			}
 
-#endif
+			//Nope, it's another IP. Ignore it.
+		}
+
+		//Unoccupied! Report this way as available for insertion
+		else
+		{
+			foundEmpty = true;
+			way = way;
+		}
+	}
+
+	//If we get here, it's not already in the cache. Did we have space to insert?
+	//If no space, pick an entry to overwrite
+	if(!foundEmpty)
+	{
+		way = m_nextWayToEvict;
+
+		//Pick another way to use next time
+		//For now, sequential replacement policy
+		m_nextWayToEvict = (m_nextWayToEvict + 1) % ARP_CACHE_WAYS;
+	}
+
+	//Insert the new entry
+	auto& row = m_ways[way].m_lines[hash];
+	row.m_valid = true;
+	row.m_ip = ip;
+	row.m_mac = mac;
+}

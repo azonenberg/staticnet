@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.14)
 project(staticnet-testing)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON) # error if compiler doesn't support c++11
 set(CMAKE_CXX_EXTENSIONS OFF) # use c++11 instead of gnu++11
 

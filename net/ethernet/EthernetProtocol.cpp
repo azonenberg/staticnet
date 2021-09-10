@@ -78,7 +78,7 @@ void EthernetProtocol::OnRxFrame(EthernetFrame* frame)
 	{
 		//Process ARP frames if we have an attached ARP stack and the frame is big enough to hold a full ARP packet
 		case ETHERTYPE_ARP:
-			if(m_arp && (frame->Length() >= sizeof(ARPPacket)) )
+			if(m_arp && (frame->GetPayloadLength() >= sizeof(ARPPacket)) )
 				m_arp->OnRxPacket(reinterpret_cast<ARPPacket*>(frame->Payload()));
 			break;
 
@@ -110,4 +110,24 @@ void EthernetProtocol::OnRxFrame(EthernetFrame* frame)
 	*/
 
 	m_iface.ReleaseRxFrame(frame);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Outbound frame path
+
+/**
+	@brief Sets up a new frame
+ */
+EthernetFrame* EthernetProtocol::GetTxFrame(ethertype_t type, const MACAddress& dest)
+{
+	//Allocate a new frame from the transmit driver
+	auto frame = m_iface.GetTxFrame();
+
+	//Fill in header fields (no VLAN tag support for now)
+	frame->DstMAC() = dest;
+	frame->SrcMAC() = m_mac;
+	frame->OuterEthertype() = type;
+
+	//Done
+	return frame;
 }

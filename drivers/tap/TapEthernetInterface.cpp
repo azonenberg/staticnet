@@ -80,15 +80,18 @@ TapEthernetInterface::~TapEthernetInterface()
 
 EthernetFrame* TapEthernetInterface::GetTxFrame()
 {
-	return NULL;
+	return new EthernetFrame;
 }
 
 void TapEthernetInterface::SendTxFrame(EthernetFrame* frame)
 {
+	write(m_hTun, frame->RawData(), frame->Length());
+	delete frame;
 }
 
 void TapEthernetInterface::CancelTxFrame(EthernetFrame* frame)
 {
+	delete frame;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

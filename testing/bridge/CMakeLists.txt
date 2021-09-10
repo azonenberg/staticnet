@@ -7,6 +7,7 @@ add_executable(bridge
 	../../drivers/base/EthernetInterface.cpp
 	../../drivers/tap/TapEthernetInterface.cpp
 
+	../../net/arp/ARPCache.cpp
 	../../net/arp/ARPPacket.cpp
 	../../net/arp/ARPProtocol.cpp
 	../../net/ethernet/EthernetFrame.cpp

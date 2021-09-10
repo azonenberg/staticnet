@@ -134,26 +134,43 @@ public:
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Upper layer protocol access
 
-	///@brief Gets the frame data (inside the 802.1q tag, if one is present)
-	uint8_t* Payload()
+	uint16_t HeaderLength() const
 	{
 		if(IsVlanTagged())
-			return &m_buffer[ETHERNET_HEADER_SIZE + ETHERNET_DOT1Q_SIZE];
+			return ETHERNET_HEADER_SIZE + ETHERNET_DOT1Q_SIZE;
 		else
-			return &m_buffer[ETHERNET_HEADER_SIZE];
+			return ETHERNET_HEADER_SIZE;
 	}
+
+	///@brief Gets the frame data (inside the 802.1q tag, if one is present)
+	uint8_t* Payload()
+	{ return &m_buffer[HeaderLength()]; }
 
 	///@brief Gets the frame data (inside the 802.1q tag, if one is present)
 	const uint8_t* Payload() const
-	{
-		if(IsVlanTagged())
-			return &m_buffer[ETHERNET_HEADER_SIZE + ETHERNET_DOT1Q_SIZE];
-		else
-			return &m_buffer[ETHERNET_HEADER_SIZE];
-	}
+	{ return &m_buffer[HeaderLength()]; }
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Raw frame access
+
+	///@brief Sets the length of the frame payload, updating the full packet length appropriately
+	void SetPayloadLength(uint16_t len)
+	{
+		//Truncate to our MTU
+		if(len > ETHERNET_PAYLOAD_MTU)
+			len = ETHERNET_PAYLOAD_MTU;
+
+		m_length = HeaderLength() + len;
+	}
+
+	///@brief Gets the length of the frame payload
+	uint16_t GetPayloadLength() const
+	{
+		size_t hlen = HeaderLength();
+		if(hlen >= m_length)
+			return 0;
+		return m_length - hlen;
+	}
 
 	///@brief Gets the length of the frame, including headers but not preamble or FCS
 	uint16_t& Length()

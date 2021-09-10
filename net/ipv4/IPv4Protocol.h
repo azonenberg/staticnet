@@ -29,45 +29,18 @@
 
 /**
 	@file
-	@brief Declaration of ARPProtocol
+	@brief Declaration of IPv4Protocol
  */
 
-#ifndef ARPProtocol_h
-#define ARPProtocol_h
+#ifndef IPv4Protocol_h
+#define IPv4Protocol_h
 
-#include "../ethernet/EthernetProtocol.h"
-#include "ARPPacket.h"
-#include "ARPCache.h"
+#include "IPv4Address.h"
 
-/**
-	@brief ARP protocol logic for a single physical interface
- */
-class ARPProtocol
-{
-public:
-	ARPProtocol(EthernetProtocol& eth, IPv4Address& ip, ARPCache& cache);
+inline bool operator!= (const IPv4Address& a, const IPv4Address& b)
+{ return a.m_word != b.m_word; }
 
-	void OnRxPacket(ARPPacket* packet);
-
-	enum
-	{
-		ARP_REQUEST = 1,
-		ARP_REPLY = 2
-	};
-
-protected:
-
-	void OnRequestPacket(ARPPacket* packet);
-	void OnReplyPacket(ARPPacket* packet);
-
-	///The Ethernet protocol stack
-	EthernetProtocol& m_eth;
-
-	///Our local IP address
-	IPv4Address& m_ip;
-
-	///Cache for storing IP -> MAC associations
-	ARPCache& m_cache;
-};
+inline bool operator== (const IPv4Address& a, const IPv4Address& b)
+{ return a.m_word == b.m_word; }
 
 #endif
