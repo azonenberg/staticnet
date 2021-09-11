@@ -29,41 +29,48 @@
 
 /**
 	@file
-	@brief Sizes and other definitions used by Ethernet protocol logic
+	@brief Declaration of ICMPv4Packet
  */
 
-#ifndef EthernetCommon_h
-#define EthernetCommon_h
+#ifndef ICMPv4Packet_h
+#define ICMPv4Packet_h
 
-///@brief Size of an Ethernet Ethertype
-#define ETHERNET_ETHERTYPE_SIZE 2
+#include "../ipv4/IPv4Address.h"
 
-///@brief Size of an Ethernet VLAN tag
-#define ETHERNET_DOT1Q_SIZE 4
-
-///@brief Minimum length of an Ethernet frame payload
-#define ETHERNET_PAYLOAD_MIN 46
-
-///@brief Size of Ethernet frame header with no VLAN tag
-#define ETHERNET_HEADER_SIZE (2*ETHERNET_MAC_SIZE + ETHERNET_ETHERTYPE_SIZE)
-
-///@brief Minimum length of an Ethernet frame including headers and payload
-#define ETHERNET_FRAME_MIN (ETHERNET_HEADER_SIZE + ETHERNET_PAYLOAD_MIN)
-
-///@brief Buffer size sufficient to hold an Ethernet frame including headers (but not preamble or FCS)
-#define ETHERNET_BUFFER_SIZE (ETHERNET_HEADER_SIZE + ETHERNET_DOT1Q_SIZE + ETHERNET_PAYLOAD_MTU)
-
-///@brief Offset from an Ethernet frame to the payload (if no VLAN tag)
-#define ETHERNET_PAYLOAD_OFFSET (sizeof(uint16_t) + ETHERNET_HEADER_SIZE)
-
-
-///@brief Known ethertypes
-enum ethertype_t
+/**
+	@brief An ICMP packet sent over IPv4
+ */
+class __attribute__((packed)) ICMPv4Packet
 {
-	ETHERTYPE_IPV4	= 0x0800,
-	ETHERTYPE_ARP	= 0x0806,
-	ETHERTYPE_DOT1Q = 0x8100,
-	ETHERTYPE_IPV6	= 0x86dd
+public:
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Accessors for actual packet data
+
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Message type fields
+
+	enum icmptype_t
+	{
+		TYPE_ECHO_REPLY		= 0,
+		TYPE_ECHO_REQUEST	= 8
+	};
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Data members
+
+	///@brief Message type
+	uint8_t		m_type;
+
+	///@brief Message subtype
+	uint8_t		m_code;
+
+	///@brief Checksum of the ICMP header only
+	uint16_t	m_checksum;
+
+	///@brief Header body, meaning varies by packet type
+	uint8_t		m_headerBody[4];
 };
 
 #endif

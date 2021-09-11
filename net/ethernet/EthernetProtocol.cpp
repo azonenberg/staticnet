@@ -42,6 +42,7 @@ EthernetProtocol::EthernetProtocol(EthernetInterface& iface, MACAddress our_mac)
 	: m_iface(iface)
 	, m_mac(our_mac)
 	, m_arp(NULL)
+	, m_ipv4(NULL)
 {
 
 }
@@ -74,16 +75,29 @@ void EthernetProtocol::OnRxFrame(EthernetFrame* frame)
 	{
 		printf("Got LLC frame, ignoring...\n");
 	}
+	uint16_t plen = frame->GetPayloadLength();
 	switch(ethertype)
 	{
 		//Process ARP frames if we have an attached ARP stack and the frame is big enough to hold a full ARP packet
 		case ETHERTYPE_ARP:
-			if(m_arp && (frame->GetPayloadLength() >= sizeof(ARPPacket)) )
+			if(m_arp && (plen >= sizeof(ARPPacket)) )
 				m_arp->OnRxPacket(reinterpret_cast<ARPPacket*>(frame->Payload()));
 			break;
 
-		//TODO: IPv4
+		//Process IPv4 frames if we have an attached IPv4 stack.
+		//Don't bother checking length, upper layer can do that
 		case ETHERTYPE_IPV4:
+			if(m_ipv4)
+			{
+				//Insert this (IP, MAC) into the ARP cache
+				//TODO: wait until upper layer checksum is validated?
+				auto packet = reinterpret_cast<IPv4Packet*>(frame->Payload());
+				if(m_arp)
+					m_arp->Insert(frame->SrcMAC(), packet->m_sourceAddress);
+
+				//then process it
+				m_ipv4->OnRxPacket(packet, plen);
+			}
 			break;
 
 		//TODO: IPv6
@@ -94,20 +108,6 @@ void EthernetProtocol::OnRxFrame(EthernetFrame* frame)
 			printf("Got frame with unrecognized Ethertype 0x%04x, ignoring...\n", ethertype);
 			break;
 	}
-
-	/*
-	printf("Ethertype: 0x%04x\n", ethertype);
-
-	printf("    ");
-	auto len = frame->Length();
-	for(size_t i=0; i<len; i++)
-	{
-		printf("%02x ", frame->RawData()[i]);
-		if( (i & 31) == 31)
-			printf("\n    ");
-	}
-	printf("\n");
-	*/
 
 	m_iface.ReleaseRxFrame(frame);
 }

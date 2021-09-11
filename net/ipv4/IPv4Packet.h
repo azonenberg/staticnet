@@ -29,41 +29,75 @@
 
 /**
 	@file
-	@brief Sizes and other definitions used by Ethernet protocol logic
+	@brief Declaration of IPv4Packet
  */
 
-#ifndef EthernetCommon_h
-#define EthernetCommon_h
+#ifndef IPv4Packet_h
+#define IPv4Packet_h
 
-///@brief Size of an Ethernet Ethertype
-#define ETHERNET_ETHERTYPE_SIZE 2
+#include "../ipv4/IPv4Address.h"
 
-///@brief Size of an Ethernet VLAN tag
-#define ETHERNET_DOT1Q_SIZE 4
-
-///@brief Minimum length of an Ethernet frame payload
-#define ETHERNET_PAYLOAD_MIN 46
-
-///@brief Size of Ethernet frame header with no VLAN tag
-#define ETHERNET_HEADER_SIZE (2*ETHERNET_MAC_SIZE + ETHERNET_ETHERTYPE_SIZE)
-
-///@brief Minimum length of an Ethernet frame including headers and payload
-#define ETHERNET_FRAME_MIN (ETHERNET_HEADER_SIZE + ETHERNET_PAYLOAD_MIN)
-
-///@brief Buffer size sufficient to hold an Ethernet frame including headers (but not preamble or FCS)
-#define ETHERNET_BUFFER_SIZE (ETHERNET_HEADER_SIZE + ETHERNET_DOT1Q_SIZE + ETHERNET_PAYLOAD_MTU)
-
-///@brief Offset from an Ethernet frame to the payload (if no VLAN tag)
-#define ETHERNET_PAYLOAD_OFFSET (sizeof(uint16_t) + ETHERNET_HEADER_SIZE)
-
-
-///@brief Known ethertypes
-enum ethertype_t
+/**
+	@brief An IPv4 packet sent over Ethernet
+ */
+class __attribute__((packed)) IPv4Packet
 {
-	ETHERTYPE_IPV4	= 0x0800,
-	ETHERTYPE_ARP	= 0x0806,
-	ETHERTYPE_DOT1Q = 0x8100,
-	ETHERTYPE_IPV6	= 0x86dd
+public:
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Byte ordering correction
+
+	void ByteSwap();
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Accessors for actual packet data
+
+	uint16_t HeaderLength()
+	{ return (m_versionAndHeaderLen & 0xf) * 4; }
+
+	uint16_t PayloadLength()
+	{ return m_totalLength - HeaderLength(); }
+
+	uint8_t* Payload()
+	{ return reinterpret_cast<uint8_t*>(this) + HeaderLength(); }
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Data members
+
+	///@brief Always 0x45 (options not supported)
+	uint8_t m_versionAndHeaderLen;
+
+	///@brief differentiated services / explicit congestion (ignored)
+	uint8_t m_dscpAndECN;
+
+	///@brief Total packet length including headers and data
+	uint16_t m_totalLength;
+
+	///@brief Fragment ID (ignored, we don't support fragmentation)
+	uint16_t m_fragID;
+
+	///@brief Flags and fragment offset
+	uint8_t m_flagsFragOffHigh;
+
+	///@brief Low half of fragment offset (not used, we don't support fragmentation)
+	uint8_t m_fragOffLow;
+
+	///@brief Time to live (ignored by us, only used by routers)
+	uint8_t m_ttl;
+
+	///@brief Upper layer protocol ID
+	uint8_t m_protocol;
+
+	///@brief Checksum over the IP header
+	uint16_t m_headerChecksum;
+
+	///@brief Origin of the packet
+	IPv4Address m_sourceAddress;
+
+	///@brief Destination of the packet
+	IPv4Address m_destAddress;
+
+	//Options and upper layer protocol data past here
 };
 
 #endif

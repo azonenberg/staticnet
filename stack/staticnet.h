@@ -46,5 +46,6 @@
 #include "../net/ethernet/EthernetProtocol.h"
 #include "../net/arp/ARPProtocol.h"
 #include "../net/ipv4/IPv4Protocol.h"
+#include "../net/icmpv4/ICMPv4Protocol.h"
 
 #endif

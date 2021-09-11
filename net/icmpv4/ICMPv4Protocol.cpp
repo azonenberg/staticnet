@@ -27,43 +27,73 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Sizes and other definitions used by Ethernet protocol logic
- */
+#include <stdio.h>
 
-#ifndef EthernetCommon_h
-#define EthernetCommon_h
+#include <staticnet-config.h>
+#include <stack/staticnet.h>
 
-///@brief Size of an Ethernet Ethertype
-#define ETHERNET_ETHERTYPE_SIZE 2
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Construction / destruction
 
-///@brief Size of an Ethernet VLAN tag
-#define ETHERNET_DOT1Q_SIZE 4
-
-///@brief Minimum length of an Ethernet frame payload
-#define ETHERNET_PAYLOAD_MIN 46
-
-///@brief Size of Ethernet frame header with no VLAN tag
-#define ETHERNET_HEADER_SIZE (2*ETHERNET_MAC_SIZE + ETHERNET_ETHERTYPE_SIZE)
-
-///@brief Minimum length of an Ethernet frame including headers and payload
-#define ETHERNET_FRAME_MIN (ETHERNET_HEADER_SIZE + ETHERNET_PAYLOAD_MIN)
-
-///@brief Buffer size sufficient to hold an Ethernet frame including headers (but not preamble or FCS)
-#define ETHERNET_BUFFER_SIZE (ETHERNET_HEADER_SIZE + ETHERNET_DOT1Q_SIZE + ETHERNET_PAYLOAD_MTU)
-
-///@brief Offset from an Ethernet frame to the payload (if no VLAN tag)
-#define ETHERNET_PAYLOAD_OFFSET (sizeof(uint16_t) + ETHERNET_HEADER_SIZE)
-
-
-///@brief Known ethertypes
-enum ethertype_t
+ICMPv4Protocol::ICMPv4Protocol(IPv4Protocol& proto)
+	: m_ipv4(proto)
 {
-	ETHERTYPE_IPV4	= 0x0800,
-	ETHERTYPE_ARP	= 0x0806,
-	ETHERTYPE_DOT1Q = 0x8100,
-	ETHERTYPE_IPV6	= 0x86dd
-};
+}
 
-#endif
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Handler for incoming packets
+
+/**
+	@brief Handles an incoming ICMP packet
+ */
+void ICMPv4Protocol::OnRxPacket(ICMPv4Packet* packet, uint16_t ipPayloadLength, IPv4Address sourceAddress)
+{
+	//Drop any packets too small for a complete header
+	if(ipPayloadLength < 8)
+		return;
+
+	//Verify checksum of packet body
+	if(0xffff != IPv4Protocol::InternetChecksum(reinterpret_cast<uint8_t*>(packet), ipPayloadLength))
+		return;
+
+	//See what we've got
+	switch(packet->m_type)
+	{
+		case ICMPv4Packet::TYPE_ECHO_REQUEST:
+			OnRxEchoRequest(packet, ipPayloadLength, sourceAddress);
+			break;
+
+		//ignore anything unrecognized
+		default:
+			break;
+	}
+}
+
+/**
+	@brief Handles an incoming echo request (ping) packet
+ */
+void ICMPv4Protocol::OnRxEchoRequest(ICMPv4Packet* packet, uint16_t ipPayloadLength, IPv4Address sourceAddress)
+{
+	//Get ready to send a reply
+	auto reply = m_ipv4.GetTxPacket(sourceAddress, IPv4Protocol::IP_PROTO_ICMP);
+	if(reply == NULL)
+		return;
+
+	//Format the reply
+	auto payload = reinterpret_cast<ICMPv4Packet*>(reply->Payload());
+	payload->m_type = ICMPv4Packet::TYPE_ECHO_REPLY;
+	payload->m_code = 0;
+	payload->m_checksum = 0;	//filler for checksum calculation
+
+	//Copy header and payload body unchanged
+	memcpy(&payload->m_headerBody, packet->m_headerBody, ipPayloadLength - 4);
+
+	//Calculate the new checksum
+	//TODO: we can patch the checksum without fully recalculating,
+	//since it's addition based and we only changed one byte!
+	payload->m_checksum = ~__builtin_bswap16(
+		IPv4Protocol::InternetChecksum(reinterpret_cast<uint8_t*>(payload), ipPayloadLength));
+
+	//Send the reply
+	m_ipv4.SendTxPacket(reply, ipPayloadLength);
+}

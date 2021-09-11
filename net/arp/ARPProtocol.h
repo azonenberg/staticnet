@@ -55,6 +55,9 @@ public:
 		ARP_REPLY = 2
 	};
 
+	void Insert(MACAddress& mac, IPv4Address ip)
+	{ m_cache.Insert(mac, ip); }
+
 protected:
 
 	void OnRequestPacket(ARPPacket* packet);

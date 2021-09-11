@@ -39,6 +39,7 @@
 #include "../../drivers/base/EthernetInterface.h"
 
 class ARPProtocol;
+class IPv4Protocol;
 
 /**
 	@brief Ethernet protocol handling
@@ -69,6 +70,9 @@ public:
 	void UseARP(ARPProtocol* arp)
 	{ m_arp = arp; }
 
+	void UseIPv4(IPv4Protocol* ipv4)
+	{ m_ipv4 = ipv4; }
+
 	const MACAddress& GetMACAddress()
 	{ return m_mac; }
 
@@ -82,6 +86,9 @@ protected:
 
 	//The ARP protocol stack for this port (if present)
 	ARPProtocol* m_arp;
+
+	//The IPv4 protocol stack for this port (if present)
+	IPv4Protocol* m_ipv4;
 };
 
 #endif

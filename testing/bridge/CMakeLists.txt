@@ -10,6 +10,9 @@ add_executable(bridge
 	../../net/arp/ARPCache.cpp
 	../../net/arp/ARPPacket.cpp
 	../../net/arp/ARPProtocol.cpp
+	../../net/icmpv4/ICMPv4Protocol.cpp
+	../../net/ipv4/IPv4Packet.cpp
+	../../net/ipv4/IPv4Protocol.cpp
 	../../net/ethernet/EthernetFrame.cpp
 	../../net/ethernet/EthernetProtocol.cpp
 

@@ -66,7 +66,6 @@ size_t ARPCache::Hash(IPv4Address ip)
 bool ARPCache::Lookup(MACAddress& mac, IPv4Address ip)
 {
 	size_t hash = Hash(ip);
-
 	for(size_t way=0; way < ARP_CACHE_WAYS; way++)
 	{
 		auto& row = m_ways[way].m_lines[hash];
@@ -76,7 +75,6 @@ bool ARPCache::Lookup(MACAddress& mac, IPv4Address ip)
 			return true;
 		}
 	}
-
 	return false;
 }
 
@@ -114,6 +112,7 @@ void ARPCache::Insert(MACAddress& mac, IPv4Address ip)
 		{
 			foundEmpty = true;
 			way = way;
+			break;
 		}
 	}
 

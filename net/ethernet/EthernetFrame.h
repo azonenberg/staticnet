@@ -166,7 +166,7 @@ public:
 	///@brief Gets the length of the frame payload
 	uint16_t GetPayloadLength() const
 	{
-		size_t hlen = HeaderLength();
+		uint16_t hlen = HeaderLength();
 		if(hlen >= m_length)
 			return 0;
 		return m_length - hlen;

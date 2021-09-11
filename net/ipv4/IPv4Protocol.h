@@ -36,11 +36,80 @@
 #define IPv4Protocol_h
 
 #include "IPv4Address.h"
+#include "IPv4Packet.h"
 
 inline bool operator!= (const IPv4Address& a, const IPv4Address& b)
 { return a.m_word != b.m_word; }
 
 inline bool operator== (const IPv4Address& a, const IPv4Address& b)
 { return a.m_word == b.m_word; }
+
+/**
+	@brief IPv4 address configuration
+ */
+class IPv4Config
+{
+public:
+	IPv4Address		m_address;
+	IPv4Address		m_netmask;
+	IPv4Address		m_broadcast;	//precomputed to save time
+	IPv4Address		m_gateway;
+};
+
+class ICMPv4Protocol;
+
+/**
+	@brief IPv4 protocol driver
+ */
+class IPv4Protocol
+{
+public:
+	IPv4Protocol(EthernetProtocol& eth, IPv4Config& config, ARPCache& cache);
+
+	enum ipproto_t
+	{
+		IP_PROTO_ICMP	= 1,
+		IP_PROTO_TCP	= 6,
+		IP_PROTO_UDP	= 17
+	};
+
+	IPv4Packet* GetTxPacket(IPv4Address dest, ipproto_t proto);
+	void SendTxPacket(IPv4Packet* packet, size_t upperLayerLength);
+
+	///@brief Cancels sending of a packet
+	void CancelTxPacket(IPv4Packet* packet)
+	{ m_eth.CancelTxFrame(reinterpret_cast<EthernetFrame*>(reinterpret_cast<uint8_t*>(packet) - ETHERNET_PAYLOAD_OFFSET)); }
+
+	void OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength);
+
+	static uint16_t InternetChecksum(uint8_t* data, uint16_t len);
+
+	enum AddressType
+	{
+		ADDR_BROADCAST,		//packet was for a broadcast address
+		ADDR_MULTICAST,		//packet was for a multicast address
+		ADDR_UNICAST_US,	//packet was for our IP
+		ADDR_UNICAST_OTHER	//packet was for someone else (only valid in promiscuous mode)
+	};
+
+	void UseICMPv4(ICMPv4Protocol* icmpv4)
+	{ m_icmpv4 = icmpv4; }
+
+	AddressType GetAddressType(IPv4Address addr);
+
+protected:
+
+	///@brief The Ethernet protocol stack
+	EthernetProtocol& m_eth;
+
+	///@brief Our local IP address configuration
+	IPv4Config& m_config;
+
+	///@brief Cache for storing IP -> MAC associations
+	ARPCache& m_cache;
+
+	///@brief ICMPv4 protocol
+	ICMPv4Protocol* m_icmpv4;
+};
 
 #endif
