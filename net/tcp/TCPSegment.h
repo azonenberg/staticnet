@@ -29,24 +29,56 @@
 
 /**
 	@file
-	@brief Main header file for staticnet library.
-
-	Copy this file into your project and customize for your requirements.
-
-	You must include your project-specific staticnet-config.h before this file.
+	@brief Declaration of TCPSegment
  */
 
-#ifndef staticnet_h
-#define staticnet_h
+#ifndef TCPSegment_h
+#define TCPSegment_h
 
-#include <stdint.h>
-#include <memory.h>
+/**
+	@brief A TCP segment sent over IPv4
+ */
+class __attribute__((packed)) TCPSegment
+{
+public:
 
-#include "../drivers/base/EthernetInterface.h"
-#include "../net/ethernet/EthernetProtocol.h"
-#include "../net/arp/ARPProtocol.h"
-#include "../net/ipv4/IPv4Protocol.h"
-#include "../net/icmpv4/ICMPv4Protocol.h"
-#include "../net/tcp/TCPProtocol.h"
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Byte ordering correction
+
+	void ByteSwap();
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Accessors for actual packet data
+
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Data members
+
+	///@brief Source port number
+	uint16_t m_sourcePort;
+
+	///@brief Destination port number
+	uint16_t m_destPort;
+
+	///@brief Sequence number
+	uint32_t m_sequence;
+
+	///@brief Acknowledgement number
+	uint32_t m_ack;
+
+	///@brief Data offset and flags
+	uint16_t m_offsetAndFlags;
+
+	///@brief Window size (before scaling)
+	uint16_t m_windowSize;
+
+	///@brief Checksum
+	uint16_t m_checksum;
+
+	///@brief Urgent pointer (ignored)
+	uint16_t m_urgent;
+
+	//Options and data apper after this
+};
 
 #endif

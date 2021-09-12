@@ -27,26 +27,22 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Main header file for staticnet library.
+#include <stdio.h>
 
-	Copy this file into your project and customize for your requirements.
+#include <staticnet-config.h>
+#include <stack/staticnet.h>
 
-	You must include your project-specific staticnet-config.h before this file.
- */
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Byte swapping
 
-#ifndef staticnet_h
-#define staticnet_h
-
-#include <stdint.h>
-#include <memory.h>
-
-#include "../drivers/base/EthernetInterface.h"
-#include "../net/ethernet/EthernetProtocol.h"
-#include "../net/arp/ARPProtocol.h"
-#include "../net/ipv4/IPv4Protocol.h"
-#include "../net/icmpv4/ICMPv4Protocol.h"
-#include "../net/tcp/TCPProtocol.h"
-
-#endif
+void TCPSegment::ByteSwap()
+{
+	m_sourcePort = __builtin_bswap16(m_sourcePort);
+	m_destPort = __builtin_bswap16(m_destPort);
+	m_sequence = __builtin_bswap32(m_sequence);
+	m_ack = __builtin_bswap32(m_ack);
+	m_offsetAndFlags = __builtin_bswap16(m_offsetAndFlags);
+	m_windowSize = __builtin_bswap16(m_windowSize);
+	//don't swap checksum, we do that in network byte order
+	//ignore urgent pointer
+}

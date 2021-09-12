@@ -56,11 +56,13 @@ int main(int /*argc*/, char* /*argv*/[])
 	//Global protocol stacks
 	IPv4Protocol ipv4(eth, ipconfig, cache);
 	ICMPv4Protocol icmpv4(ipv4);
+	TCPProtocol tcp(&ipv4);
 
 	//Register protocol handlers with the lower layer
 	eth.UseARP(&arp);
 	eth.UseIPv4(&ipv4);
 	ipv4.UseICMPv4(&icmpv4);
+	ipv4.UseTCP(&tcp);
 
 	//Main event handling loop
 	while(true)

@@ -57,6 +57,7 @@ public:
 };
 
 class ICMPv4Protocol;
+class TCPProtocol;
 
 /**
 	@brief IPv4 protocol driver
@@ -82,7 +83,7 @@ public:
 
 	void OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength);
 
-	static uint16_t InternetChecksum(uint8_t* data, uint16_t len);
+	static uint16_t InternetChecksum(uint8_t* data, uint16_t len, uint16_t initial = 0);
 
 	enum AddressType
 	{
@@ -94,6 +95,9 @@ public:
 
 	void UseICMPv4(ICMPv4Protocol* icmpv4)
 	{ m_icmpv4 = icmpv4; }
+
+	void UseTCP(TCPProtocol* tcp)
+	{ m_tcp = tcp; }
 
 	AddressType GetAddressType(IPv4Address addr);
 
@@ -110,6 +114,9 @@ protected:
 
 	///@brief ICMPv4 protocol
 	ICMPv4Protocol* m_icmpv4;
+
+	///@brief TCP protocol
+	TCPProtocol* m_tcp;
 };
 
 #endif

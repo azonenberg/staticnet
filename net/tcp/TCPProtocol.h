@@ -29,24 +29,33 @@
 
 /**
 	@file
-	@brief Main header file for staticnet library.
-
-	Copy this file into your project and customize for your requirements.
-
-	You must include your project-specific staticnet-config.h before this file.
+	@brief Declaration of TCPProtocol
  */
 
-#ifndef staticnet_h
-#define staticnet_h
+#ifndef TCPProtocol_h
+#define TCPProtocol_h
 
-#include <stdint.h>
-#include <memory.h>
+#include "TCPSegment.h"
 
-#include "../drivers/base/EthernetInterface.h"
-#include "../net/ethernet/EthernetProtocol.h"
-#include "../net/arp/ARPProtocol.h"
-#include "../net/ipv4/IPv4Protocol.h"
-#include "../net/icmpv4/ICMPv4Protocol.h"
-#include "../net/tcp/TCPProtocol.h"
+/**
+	@brief TCP protocol driver
+ */
+class TCPProtocol
+{
+public:
+	TCPProtocol(IPv4Protocol* ipv4);
+	//TODO: IPv6 backend
+
+	void OnRxPacket(
+		TCPSegment* segment,
+		uint16_t ipPayloadLength,
+		IPv4Address sourceAddress,
+		uint16_t pseudoHeaderChecksum);
+
+protected:
+
+	///The IPv4 protocol stack
+	IPv4Protocol* m_ipv4;
+};
 
 #endif

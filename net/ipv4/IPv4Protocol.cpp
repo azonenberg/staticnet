@@ -43,6 +43,7 @@ IPv4Protocol::IPv4Protocol(EthernetProtocol& eth, IPv4Config& config, ARPCache& 
 	, m_config(config)
 	, m_cache(cache)
 	, m_icmpv4(NULL)
+	, m_tcp(NULL)
 {
 
 }
@@ -53,11 +54,11 @@ IPv4Protocol::IPv4Protocol(EthernetProtocol& eth, IPv4Config& config, ARPCache& 
 /**
 	@brief Computes the Internet Checksum on a block of data in network byte order.
  */
-uint16_t IPv4Protocol::InternetChecksum(uint8_t* data, uint16_t len)
+uint16_t IPv4Protocol::InternetChecksum(uint8_t* data, uint16_t len, uint16_t initial)
 {
 	//Sum in 16-bit blocks until we run out
 	uint16_t* data16 = reinterpret_cast<uint16_t*>(data);
-	uint32_t checksum = 0;
+	uint32_t checksum = initial;
 	while(len >= 2)
 	{
 		//Add with carry
@@ -145,6 +146,27 @@ void IPv4Protocol::OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength
 	if(type == ADDR_UNICAST_OTHER)
 		return;
 
+	//Calculate pseudo header checksum used by TCP and UDP
+	//(not needed for ICMP)
+	uint16_t plen = packet->PayloadLength();
+	uint8_t pseudoheader[]
+	{
+		packet->m_sourceAddress.m_octets[0],
+		packet->m_sourceAddress.m_octets[1],
+		packet->m_sourceAddress.m_octets[2],
+		packet->m_sourceAddress.m_octets[3],
+
+		packet->m_destAddress.m_octets[0],
+		packet->m_destAddress.m_octets[1],
+		packet->m_destAddress.m_octets[2],
+		packet->m_destAddress.m_octets[3],
+
+		0x0,
+		IP_PROTO_TCP,
+		static_cast<uint8_t>(plen >> 8),
+		static_cast<uint8_t>(plen & 0xff)
+	};
+
 	//Figure out the upper layer protocol
 	switch(packet->m_protocol)
 	{
@@ -164,8 +186,14 @@ void IPv4Protocol::OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength
 		//TCP segments must be directed at our unicast address.
 		//The connection oriented flow makes no sense to be broadcast/multicast.
 		case IP_PROTO_TCP:
-			if(type == ADDR_UNICAST_US)
-				printf("got TCP segment TODO\n");
+			if(m_tcp && (type == ADDR_UNICAST_US) )
+			{
+				m_tcp->OnRxPacket(
+					reinterpret_cast<TCPSegment*>(packet->Payload()),
+					plen,
+					packet->m_sourceAddress,
+					InternetChecksum(pseudoheader, sizeof(pseudoheader)));
+			}
 			break;
 
 		//TODO: handle UDP traffic
