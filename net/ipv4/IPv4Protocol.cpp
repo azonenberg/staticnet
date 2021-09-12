@@ -78,6 +78,32 @@ uint16_t IPv4Protocol::InternetChecksum(uint8_t* data, uint16_t len, uint16_t in
 	return checksum;
 }
 
+/**
+	@brief Calculates the TCP/UDP pseudoheader checksum for a packet
+ */
+uint16_t IPv4Protocol::PseudoHeaderChecksum(IPv4Packet* packet, uint16_t length)
+{
+	uint8_t pseudoheader[]
+	{
+		packet->m_sourceAddress.m_octets[0],
+		packet->m_sourceAddress.m_octets[1],
+		packet->m_sourceAddress.m_octets[2],
+		packet->m_sourceAddress.m_octets[3],
+
+		packet->m_destAddress.m_octets[0],
+		packet->m_destAddress.m_octets[1],
+		packet->m_destAddress.m_octets[2],
+		packet->m_destAddress.m_octets[3],
+
+		0x0,
+		packet->m_protocol,
+		static_cast<uint8_t>(length >> 8),
+		static_cast<uint8_t>(length & 0xff)
+	};
+
+	return InternetChecksum(pseudoheader, sizeof(pseudoheader));
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Routing helpers
 
@@ -146,28 +172,8 @@ void IPv4Protocol::OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength
 	if(type == ADDR_UNICAST_OTHER)
 		return;
 
-	//Calculate pseudo header checksum used by TCP and UDP
-	//(not needed for ICMP)
-	uint16_t plen = packet->PayloadLength();
-	uint8_t pseudoheader[]
-	{
-		packet->m_sourceAddress.m_octets[0],
-		packet->m_sourceAddress.m_octets[1],
-		packet->m_sourceAddress.m_octets[2],
-		packet->m_sourceAddress.m_octets[3],
-
-		packet->m_destAddress.m_octets[0],
-		packet->m_destAddress.m_octets[1],
-		packet->m_destAddress.m_octets[2],
-		packet->m_destAddress.m_octets[3],
-
-		0x0,
-		IP_PROTO_TCP,
-		static_cast<uint8_t>(plen >> 8),
-		static_cast<uint8_t>(plen & 0xff)
-	};
-
 	//Figure out the upper layer protocol
+	uint16_t plen = packet->PayloadLength();
 	switch(packet->m_protocol)
 	{
 		//We respond to pings sent to unicast or broadcast addresses only.
@@ -192,7 +198,7 @@ void IPv4Protocol::OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength
 					reinterpret_cast<TCPSegment*>(packet->Payload()),
 					plen,
 					packet->m_sourceAddress,
-					InternetChecksum(pseudoheader, sizeof(pseudoheader)));
+					PseudoHeaderChecksum(packet, plen));
 			}
 			break;
 

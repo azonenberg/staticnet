@@ -47,7 +47,13 @@
 ///@brief Number of ways of associativity for the ARP cache
 #define ARP_CACHE_WAYS 4
 
-///@brief Number of lines per set ion the ARP cache
+///@brief Number of lines per set in the ARP cache
 #define ARP_CACHE_LINES 256
+
+///@brief Number of entries in the TCP socket table
+#define TCP_TABLE_WAYS 2
+
+///@brief Number of lines per set in the TCP socket table
+#define TCP_TABLE_LINES 16
 
 #endif

@@ -66,54 +66,228 @@ void TCPProtocol::OnRxPacket(
 	}
 	segment->ByteSwap();
 
-	printf("got TCP segment with valid checksum\n");
+	//Sanity check that the data offset points within the segment and not after the end
+	uint16_t off = segment->GetDataOffsetBytes();
+	if(off > ipPayloadLength)
+		return;
+	uint16_t payloadLen = ipPayloadLength - off;
 
-	/*
-
-
-
-
-	//See what we've got
-	switch(packet->m_type)
+	//Check flags to see what it is
+	if(segment->m_offsetAndFlags & TCPSegment::FLAG_SYN)
 	{
-		case TCPPacket::TYPE_ECHO_REQUEST:
-			OnRxEchoRequest(packet, ipPayloadLength, sourceAddress);
-			break;
-
-		//ignore anything unrecognized
-		default:
-			break;
+		//TODO: check for SYN+ACK (we can only ever see this if we're a client)
+		//For now we only support the server use case, so any SYN is a connection request
+		OnRxSYN(segment, sourceAddress);
 	}
-	*/
+
+	else if(segment->m_offsetAndFlags & TCPSegment::FLAG_RST)
+		OnRxRST(segment, sourceAddress);
+
+	else if(segment->m_offsetAndFlags & TCPSegment::FLAG_ACK)
+		OnRxACK(segment, sourceAddress, payloadLen);
+
 }
 
 /**
-	@brief Handles an incoming echo request (ping) packet
+	@brief Handles an incoming SYN
  */
- /*
-void TCPProtocol::OnRxEchoRequest(TCPPacket* packet, uint16_t ipPayloadLength, IPv4Address sourceAddress)
+void TCPProtocol::OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress)
 {
-	//Get ready to send a reply
-	auto reply = m_ipv4.GetTxPacket(sourceAddress, IPv4Protocol::IP_PROTO_ICMP);
-	if(reply == NULL)
+	//If port is not open, send a RST
+	if(!IsPortOpen(segment->m_destPort))
+	{
+		//Get ready to send a reply, if no free buffers give up
+		auto reply = m_ipv4->GetTxPacket(sourceAddress, IPv4Protocol::IP_PROTO_TCP);
+		if(reply == NULL)
+			return;
+
+		//Format the reply
+		auto payload = reinterpret_cast<TCPSegment*>(reply->Payload());
+		payload->m_sourcePort = segment->m_destPort;
+		payload->m_destPort = segment->m_sourcePort;
+		payload->m_sequence = 0;
+		payload->m_ack = segment->m_sequence + 1;
+		payload->m_offsetAndFlags = (5 << 12) | TCPSegment::FLAG_RST | TCPSegment::FLAG_ACK;
+		payload->m_windowSize = 1;
+		payload->m_urgent = 0;
+
+		//Done
+		SendSegment(payload, reply);
 		return;
+	}
+
+	//TODO: See if we already have open state for this hash.
+	//If so, this is a repeated SYN for an open socket (our ACK didn't make it)
+
+	//Figure out which socket table entry to use
+	auto handle = AllocateSocketHandle(Hash(sourceAddress, segment->m_destPort, segment->m_sourcePort));
+	if(handle == INVALID_TCP_HANDLE)
+	{
+		//No free socket handles available.
+		//Silently drop the connection request
+		return;
+	}
+
+	printf("Got a SYN (requesting local port %d)\n", segment->m_destPort);
+	printf("    Socket handle %08x\n", handle);
+
+	//Fill out the initial table entry
+	auto state = GetSocketState(handle);
+	if(!state)
+		return;
+	state->m_remoteIP = sourceAddress;
+	state->m_localPort = segment->m_destPort;
+	state->m_remotePort = segment->m_sourcePort;
+	state->m_remoteSeq = segment->m_sequence + 1;
+	state->m_localSeq = GenerateInitialSequenceNumber();
+
+	//Prepare the reply
+	auto reply = CreateReply(state);
+	auto payload = reinterpret_cast<TCPSegment*>(reply->Payload());
+	payload->m_offsetAndFlags |= TCPSegment::FLAG_SYN;
+
+	//Send it
+	SendSegment(payload, reply);
+
+	//The SYN flag counts as a byte in the stream, so we expect the next ACK to be one greater than what we sent
+	state->m_remoteSeq ++;
+}
+
+/**
+	@brief Handles an incoming SYN
+ */
+void TCPProtocol::OnRxRST(TCPSegment* /*segment*/, IPv4Address /*sourceAddress*/)
+{
+	printf("TODO: handle RST\n");
+}
+
+/**
+	@brief Handles an incoming frame during a connection
+ */
+void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16_t payloadLen)
+{
+	//Look up the socket handle
+	printf("Got an ACK segment\n");
+
+
+
+	if(segment->m_offsetAndFlags & TCPSegment::FLAG_FIN)
+		printf("TODO: handle FIN\n");
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Outbound traffic
+
+/**
+	@brief Does final prep and sends a TCP segment
+ */
+void TCPProtocol::SendSegment(TCPSegment* segment, IPv4Packet* packet, uint16_t length)
+{
+	//Calculate the pseudoheader checksum
+	auto pseudoHeaderChecksum = m_ipv4->PseudoHeaderChecksum(packet, length);
+
+	//Need to be in network byte order before we send
+	segment->ByteSwap();
+
+	segment->m_checksum = ~__builtin_bswap16(
+		IPv4Protocol::InternetChecksum(reinterpret_cast<uint8_t*>(segment), length, pseudoHeaderChecksum));
+	m_ipv4->SendTxPacket(packet, length);
+}
+
+/**
+	@brief Create a reply segment for a given socket state
+ */
+IPv4Packet* TCPProtocol::CreateReply(TCPTableEntry* state)
+{
+	//Get ready to send a reply, if no free buffers give up
+	auto reply = m_ipv4->GetTxPacket(state->m_remoteIP, IPv4Protocol::IP_PROTO_TCP);
+	if(reply == NULL)
+		return NULL;
 
 	//Format the reply
-	auto payload = reinterpret_cast<TCPPacket*>(reply->Payload());
-	payload->m_type = TCPPacket::TYPE_ECHO_REPLY;
-	payload->m_code = 0;
-	payload->m_checksum = 0;	//filler for checksum calculation
+	auto payload = reinterpret_cast<TCPSegment*>(reply->Payload());
+	payload->m_sourcePort = state->m_localPort;
+	payload->m_destPort = state->m_remotePort;
+	payload->m_sequence = state->m_localSeq;
+	payload->m_ack = state->m_remoteSeq;
+	payload->m_offsetAndFlags = (5 << 12) | TCPSegment::FLAG_PSH | TCPSegment::FLAG_ACK;
+	payload->m_windowSize = TCP_IPV4_PAYLOAD_MTU;	//TODO: support variable window size
+	payload->m_urgent = 0;
 
-	//Copy header and payload body unchanged
-	memcpy(&payload->m_headerBody, packet->m_headerBody, ipPayloadLength - 4);
-
-	//Calculate the new checksum
-	//TODO: we can patch the checksum without fully recalculating,
-	//since it's addition based and we only changed one byte!
-	payload->m_checksum = ~__builtin_bswap16(
-		IPv4Protocol::InternetChecksum(reinterpret_cast<uint8_t*>(payload), ipPayloadLength));
-
-	//Send the reply
-	m_ipv4.SendTxPacket(reply, ipPayloadLength);
+	return reply;
 }
-*/
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Socket table stuff
+
+/**
+	@brief Hashes an IP address and returns a row index
+
+	32-bit FNV-1 for now. Simple and good mixing, but uses a bunch of multiplies so might be slow?
+ */
+uint16_t TCPProtocol::Hash(IPv4Address ip, uint16_t localPort, uint16_t remotePort)
+{
+	size_t hash = FNV_INITIAL;
+	for(size_t i=0; i<4; i++)
+		hash = (hash * FNV_MULT) ^ ip.m_octets[i];
+	hash = (hash * FNV_MULT) ^ (localPort >> 8);
+	hash = (hash * FNV_MULT) ^ (localPort & 0xff);
+	hash = (hash * FNV_MULT) ^ (remotePort >> 8);
+	hash = (hash * FNV_MULT) ^ (remotePort & 0xff);
+
+	return hash % TCP_TABLE_LINES;
+}
+
+/**
+	@brief Finds a free space in the socket table for the given hash, then marks it as in use and returns the handle.
+
+	A socket handle is a 32-bit integer with the high 16 bits containing the way ID and the low 16 the line ID.
+
+	The special value INVALID_TCP_HANDLE is returned if there is no space in the table.
+ */
+uint32_t TCPProtocol::AllocateSocketHandle(uint16_t hash)
+{
+	for(size_t way=0; way < TCP_TABLE_WAYS; way ++)
+	{
+		auto& row = m_socketTable[way].m_lines[hash];
+
+		//There's something in the row. We can't insert here.
+		if(row.m_valid)
+			continue;
+
+		//It's free, all good
+		else
+		{
+			row.m_valid = true;
+			return (way << 16) | hash;
+		}
+	}
+
+	//No free entries found
+	return INVALID_TCP_HANDLE;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Overrides for end user application logic
+
+/**
+	@brief Checks if a given port is open or not
+
+	The default implementation returns true for port 22 only (SSH)
+ */
+bool TCPProtocol::IsPortOpen(uint16_t port)
+{
+	return (port == 22);
+}
+
+/**
+	@brief Generates a random initial sequence number for a new socket.
+
+	This should be overridden in derived classes to use the best randomness available (hardware RNG etc).
+ */
+uint32_t TCPProtocol::GenerateInitialSequenceNumber()
+{
+	//generated by fair dice roll
+	//guaranteed to be random
+	return 4;
+}

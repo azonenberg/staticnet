@@ -56,7 +56,6 @@
 ///@brief Offset from an Ethernet frame to the payload (if no VLAN tag)
 #define ETHERNET_PAYLOAD_OFFSET (sizeof(uint16_t) + ETHERNET_HEADER_SIZE)
 
-
 ///@brief Known ethertypes
 enum ethertype_t
 {

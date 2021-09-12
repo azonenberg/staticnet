@@ -49,4 +49,8 @@
 #include "../net/icmpv4/ICMPv4Protocol.h"
 #include "../net/tcp/TCPProtocol.h"
 
+//Constants used for FNV hash
+#define FNV_INITIAL	0x811c9dc5
+#define FNV_MULT	0x01000193
+
 #endif

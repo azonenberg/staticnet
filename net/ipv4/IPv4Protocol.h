@@ -59,6 +59,8 @@ public:
 class ICMPv4Protocol;
 class TCPProtocol;
 
+#define IPV4_PAYLOAD_MTU (ETHERNET_PAYLOAD_MTU - 20)
+
 /**
 	@brief IPv4 protocol driver
  */
@@ -84,6 +86,7 @@ public:
 	void OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength);
 
 	static uint16_t InternetChecksum(uint8_t* data, uint16_t len, uint16_t initial = 0);
+	uint16_t PseudoHeaderChecksum(IPv4Packet* packet, uint16_t length);
 
 	enum AddressType
 	{

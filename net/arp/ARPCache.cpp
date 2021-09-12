@@ -50,9 +50,9 @@ ARPCache::ARPCache()
  */
 size_t ARPCache::Hash(IPv4Address ip)
 {
-	size_t hash = 0x811c9dc5;
+	size_t hash = FNV_INITIAL;
 	for(size_t i=0; i<4; i++)
-		hash = (hash * 0x01000193) ^ ip.m_octets[i];
+		hash = (hash * FNV_MULT) ^ ip.m_octets[i];
 
 	return hash % ARP_CACHE_LINES;
 }

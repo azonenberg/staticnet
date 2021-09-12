@@ -38,6 +38,45 @@
 #include "TCPSegment.h"
 
 /**
+	@brief A single entry in the TCP socket table
+ */
+class TCPTableEntry
+{
+public:
+	TCPTableEntry()
+	: m_valid(false)
+	{}
+
+	bool m_valid;
+	IPv4Address m_remoteIP;
+	uint16_t m_localPort;
+	uint16_t m_remotePort;
+
+	/**
+		@brief Expected sequence number of the next incoming packet.
+
+		This is the most recent ACK number wet sent.
+	 */
+	uint32_t m_remoteSeq;
+
+	///@brief Most recent sequence number we sent
+	uint32_t m_localSeq;
+
+	//TODO: aging
+};
+
+/**
+	@brief A single bank of the TCP socket table (direct mapped)
+ */
+class TCPTableWay
+{
+public:
+	TCPTableEntry m_lines[TCP_TABLE_LINES];
+};
+
+#define TCP_IPV4_PAYLOAD_MTU (IPV4_PAYLOAD_MTU - 20)
+
+/**
 	@brief TCP protocol driver
  */
 class TCPProtocol
@@ -53,9 +92,41 @@ public:
 		uint16_t pseudoHeaderChecksum);
 
 protected:
+	virtual bool IsPortOpen(uint16_t port);
+	virtual uint32_t GenerateInitialSequenceNumber();
 
-	///The IPv4 protocol stack
+protected:
+	void OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress);
+	void OnRxRST(TCPSegment* segment, IPv4Address sourceAddress);
+	void OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16_t payloadLen);
+
+	uint16_t Hash(IPv4Address ip, uint16_t localPort, uint16_t remotePort);
+
+	uint32_t AllocateSocketHandle(uint16_t hash);
+	IPv4Packet* CreateReply(TCPTableEntry* state);
+
+	void SendSegment(TCPSegment* segment, IPv4Packet* packet, uint16_t length = sizeof(TCPSegment));
+
+	/**
+		@brief Gets the state for a socket given the handle
+	 */
+	TCPTableEntry* GetSocketState(uint32_t handle)
+	{
+		auto way = (handle >> 16);
+		auto row = (handle & 0xffff);
+		if( (way >= TCP_TABLE_WAYS) || (row >= TCP_TABLE_LINES) )
+			return NULL;
+
+		return &m_socketTable[way].m_lines[row];
+	}
+
+	///@brief The IPv4 protocol stack
 	IPv4Protocol* m_ipv4;
+
+	///@brief The socket state table
+	TCPTableWay m_socketTable[TCP_TABLE_WAYS];
 };
+
+#define INVALID_TCP_HANDLE 0xffffffff
 
 #endif
