@@ -127,8 +127,6 @@ void TCPProtocol::OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress)
 		return;
 	}
 
-	printf("Got a SYN (requesting local port %d)\n", segment->m_destPort);
-
 	//Fill out the initial table entry
 	state->m_remoteIP = sourceAddress;
 	state->m_localPort = segment->m_destPort;
@@ -146,6 +144,9 @@ void TCPProtocol::OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress)
 
 	//The SYN flag counts as a byte in the stream, so we expect the next ACK to be one greater than what we sent
 	state->m_localSeq ++;
+
+	//Notify upper layer stuff
+	OnConnectionAccepted(state);
 }
 
 /**
@@ -322,13 +323,24 @@ TCPTableEntry* TCPProtocol::AllocateSocketHandle(uint16_t hash)
 // Overrides for end user application logic
 
 /**
+	@brief Handler for a new incoming connection
+
+	Override to initialize application-layer state or do other per-connection setup.
+
+	The default implementation does nothing.
+ */
+void TCPProtocol::OnConnectionAccepted(TCPTableEntry* /*state*/)
+{
+}
+
+/**
 	@brief Checks if a given port is open or not
 
-	The default implementation returns true for all ports
+	The default implementation returns true for all ports.
  */
-bool TCPProtocol::IsPortOpen(uint16_t port)
+bool TCPProtocol::IsPortOpen(uint16_t /*port*/)
 {
-	return (port == 22);
+	return true;
 }
 
 /**

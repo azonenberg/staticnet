@@ -27,37 +27,59 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-#include "bridge.h"
+/**
+	@file
+	@brief Declaration of SSHTransportServer
+ */
+#ifndef SSHTransportServer_h
+#define SSHTransportServer_h
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Construction / destruction
-
-BridgeTCPProtocol::BridgeTCPProtocol(IPv4Protocol* ipv4)
-	: TCPProtocol(ipv4)
-	, m_server(*this)
+/**
+	@brief State for a single SSH connection
+ */
+class SSHConnectionState
 {
-}
+public:
+	SSHConnectionState()
+	{ Clear(); }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Message handlers
+	/**
+		@brief Clears connection state
+	 */
+	void Clear()
+	{
+		m_valid = false;
+		m_socket = NULL;
+	}
 
-bool BridgeTCPProtocol::IsPortOpen(uint16_t port)
+	///@brief True if the connection is valid
+	bool	m_valid;
+
+	///@brief Socket state handle
+	TCPTableEntry* m_socket;
+};
+
+/**
+	@brief Server for the SSH transport layer (RFC 4253)
+ */
+class SSHTransportServer
 {
-	return (port == 22);
-}
+public:
+	SSHTransportServer(TCPProtocol& tcp);
 
-void BridgeTCPProtocol::OnConnectionAccepted(TCPTableEntry* state)
-{
-	//Tell the SSH server process to do its thing
-	m_server.OnConnectionAccepted(state);
-}
+	//Event handlers
+	void OnConnectionAccepted(TCPTableEntry* state);
+	void OnRxData(TCPTableEntry* state, uint8_t* payload, uint16_t payloadLen);
 
-void BridgeTCPProtocol::OnRxData(TCPTableEntry* state, uint8_t* payload, uint16_t payloadLen)
-{
-	//Discard anything not to port 22
-	if(state->m_localPort != 22)
-		return;
+protected:
+	int GetConnectionID(TCPTableEntry* state);
+	int AllocateConnectionID(TCPTableEntry* state);
 
-	//Pass the incoming traffic off to the SSH server process
-	m_server.OnRxData(state, payload, payloadLen);
-}
+	///@brief The transport layer for our traffic
+	TCPProtocol& m_tcp;
+
+	///@brief The SSH connection table
+	SSHConnectionState m_state[SSH_TABLE_SIZE];
+};
+
+#endif

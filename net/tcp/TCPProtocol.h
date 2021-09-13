@@ -91,10 +91,34 @@ public:
 		IPv4Address sourceAddress,
 		uint16_t pseudoHeaderChecksum);
 
+	TCPSegment* GetTxSegment(TCPTableEntry* state)
+	{ return reinterpret_cast<TCPSegment*>(CreateReply(state)->Payload()); }
+
+	/**
+		@brief Sends a TCP segment on a given socket handle
+	 */
+	void SendTxSegment(TCPTableEntry* state, TCPSegment* segment, uint16_t payloadLength)
+	{
+		//Update the socket state to expect a new ACK number in response to this segment
+		auto packet = reinterpret_cast<IPv4Packet*>(reinterpret_cast<uint8_t*>(segment) - sizeof(IPv4Packet));
+		state->m_localSeq += payloadLength;
+
+		//Add the PSH flag since this segment contains data
+		segment->m_offsetAndFlags |= TCPSegment::FLAG_PSH;
+
+		//Reay to send
+		SendSegment(segment, packet, payloadLength + sizeof(TCPSegment));
+	}
+
+	///@brief Cancels sending of a packet
+	void CancelTxSegment(TCPSegment* segment)
+	{ m_ipv4->CancelTxPacket(reinterpret_cast<IPv4Packet*>(reinterpret_cast<uint8_t*>(segment) - sizeof(IPv4Packet))); }
+
 protected:
 	virtual bool IsPortOpen(uint16_t port);
 	virtual uint32_t GenerateInitialSequenceNumber();
 	virtual void OnRxData(TCPTableEntry* state, uint8_t* payload, uint16_t payloadLen);
+	virtual void OnConnectionAccepted(TCPTableEntry* state);
 
 protected:
 	void OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress);

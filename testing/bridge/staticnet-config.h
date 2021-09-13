@@ -56,4 +56,7 @@
 ///@brief Number of lines per set in the TCP socket table
 #define TCP_TABLE_LINES 16
 
+///@brief Maximum number of SSH connections supported
+#define SSH_TABLE_SIZE 4
+
 #endif

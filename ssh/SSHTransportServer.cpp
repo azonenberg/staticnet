@@ -27,37 +27,65 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-#include "bridge.h"
+#include <stdio.h>
+
+#include <staticnet-config.h>
+#include <stack/staticnet.h>
+#include "SSHTransportServer.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
 
-BridgeTCPProtocol::BridgeTCPProtocol(IPv4Protocol* ipv4)
-	: TCPProtocol(ipv4)
-	, m_server(*this)
+SSHTransportServer::SSHTransportServer(TCPProtocol& tcp)
+	: m_tcp(tcp)
 {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Message handlers
+// Event handlers
 
-bool BridgeTCPProtocol::IsPortOpen(uint16_t port)
+/**
+	@brief Allocates a new connection ID for a connection, or returns -1 if there are no free table entries
+ */
+int SSHTransportServer::AllocateConnectionID(TCPTableEntry* state)
 {
-	return (port == 22);
+	for(int i=0; i<SSH_TABLE_SIZE; i++)
+	{
+		if(!m_state[i].m_valid)
+		{
+			m_state[i].m_valid = true;
+			m_state[i].m_socket = state;
+			return i;
+		}
+	}
+
+	return -1;
 }
 
-void BridgeTCPProtocol::OnConnectionAccepted(TCPTableEntry* state)
+int SSHTransportServer::GetConnectionID(TCPTableEntry* state)
 {
-	//Tell the SSH server process to do its thing
-	m_server.OnConnectionAccepted(state);
+	return -1;
 }
 
-void BridgeTCPProtocol::OnRxData(TCPTableEntry* state, uint8_t* payload, uint16_t payloadLen)
+/**
+	@brief Handles a newly accepted connection
+ */
+void SSHTransportServer::OnConnectionAccepted(TCPTableEntry* state)
 {
-	//Discard anything not to port 22
-	if(state->m_localPort != 22)
+	//Make a new entry in the socket state table
+	int id = AllocateConnectionID(state);
+	if(id < 0)
 		return;
 
-	//Pass the incoming traffic off to the SSH server process
-	m_server.OnRxData(state, payload, payloadLen);
+	static const char banner[] = "SSH-2.0-staticnet_0.1\r\n";
+
+	//Send our banner to the client
+	auto segment = m_tcp.GetTxSegment(state);
+	auto payload = segment->Payload();
+	strncpy((char*)payload, banner, TCP_IPV4_PAYLOAD_MTU);
+	m_tcp.SendTxSegment(state, segment, sizeof(banner)-1);
+}
+
+void SSHTransportServer::OnRxData(TCPTableEntry* state, uint8_t* payload, uint16_t payloadLen)
+{
 }
