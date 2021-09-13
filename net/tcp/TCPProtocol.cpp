@@ -248,6 +248,25 @@ IPv4Packet* TCPProtocol::CreateReply(TCPTableEntry* state)
 	return reply;
 }
 
+/**
+	@brief Close a socket
+ */
+void TCPProtocol::CloseSocket(TCPTableEntry* state)
+{
+	//Prepare the reply
+	auto reply = CreateReply(state);
+	auto payload = reinterpret_cast<TCPSegment*>(reply->Payload());
+	payload->m_offsetAndFlags |= TCPSegment::FLAG_FIN;
+
+	//Send it
+	SendSegment(payload, reply);
+
+	//The FIN flag counts as a byte in the stream, so we expect the next ACK to be one greater than what we sent
+	state->m_localSeq ++;
+
+	//Don't close the socket state on our end until we get the FIN+ACK
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Socket table stuff
 

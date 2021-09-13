@@ -114,6 +114,9 @@ public:
 	void CancelTxSegment(TCPSegment* segment)
 	{ m_ipv4->CancelTxPacket(reinterpret_cast<IPv4Packet*>(reinterpret_cast<uint8_t*>(segment) - sizeof(IPv4Packet))); }
 
+	///@brief Close a socket from the server side
+	void CloseSocket(TCPTableEntry* state);
+
 protected:
 	virtual bool IsPortOpen(uint16_t port);
 	virtual uint32_t GenerateInitialSequenceNumber();
