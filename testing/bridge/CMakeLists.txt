@@ -18,7 +18,10 @@ add_executable(bridge
 	../../net/tcp/TCPSegment.cpp
 	../../net/tcp/TCPProtocol.cpp
 
+	../../ssh/SSHTransportServer.cpp
+
 	main.cpp
+	BridgeTCPProtocol.cpp
 )
 
 ###############################################################################

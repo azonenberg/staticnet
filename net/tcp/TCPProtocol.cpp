@@ -324,7 +324,7 @@ TCPTableEntry* TCPProtocol::AllocateSocketHandle(uint16_t hash)
 /**
 	@brief Checks if a given port is open or not
 
-	The default implementation returns true for port 22 only (SSH)
+	The default implementation returns true for all ports
  */
 bool TCPProtocol::IsPortOpen(uint16_t port)
 {
@@ -344,10 +344,10 @@ uint32_t TCPProtocol::GenerateInitialSequenceNumber()
 }
 
 /**
-	@brief Handles incoming packet data
+	@brief Handles incoming packet data.
+
+	The default implementation does nothing.
  */
-void TCPProtocol::OnRxData(TCPTableEntry* state, uint8_t* payload, uint16_t payloadLen)
+void TCPProtocol::OnRxData(TCPTableEntry* /*state*/, uint8_t* /*payload*/, uint16_t /*payloadLen*/)
 {
-	payload[payloadLen] = 0;
-	printf("Got %u bytes on socket (to port %d): \"%s\"\n", payloadLen, state->m_localPort, (char*)payload);
 }

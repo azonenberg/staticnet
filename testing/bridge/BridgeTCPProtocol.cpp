@@ -29,44 +29,28 @@
 
 #include "bridge.h"
 
-int main(int /*argc*/, char* /*argv*/[])
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Construction / destruction
+
+BridgeTCPProtocol::BridgeTCPProtocol(IPv4Protocol* ipv4)
+	: TCPProtocol(ipv4)
 {
-	//Bring up the tap interface
-	TapEthernetInterface iface("simtap");
+}
 
-	//Address configuration
-	MACAddress mac = {{ 0x02, 0xde, 0xad, 0xbe, 0xef, 0x41 }};
-	IPv4Config ipconfig;
-	ipconfig.m_address		= { .m_octets{192, 168,   1,   2} };
-	ipconfig.m_netmask		= { .m_octets{255, 255, 255,   0} };
-	ipconfig.m_broadcast	= { .m_octets{192, 168,   1, 255} };
-	ipconfig.m_gateway		= { .m_octets{192, 168,   1,   1} };
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Message handlers
 
-	//ARP cache (shared by all interfaces)
-	ARPCache cache;
+bool BridgeTCPProtocol::IsPortOpen(uint16_t port)
+{
+	return (port == 22);
+}
 
-	//Per-interface protocol stacks
-	EthernetProtocol eth(iface, mac);
-	ARPProtocol arp(eth, ipconfig.m_address, cache);
+void BridgeTCPProtocol::OnRxData(TCPTableEntry* state, uint8_t* payload, uint16_t payloadLen)
+{
+	//Discard anything not to port 22
+	if(state->m_localPort != 22)
+		return;
 
-	//Global protocol stacks
-	IPv4Protocol ipv4(eth, ipconfig, cache);
-	ICMPv4Protocol icmpv4(ipv4);
-	BridgeTCPProtocol tcp(&ipv4);
-
-	//Register protocol handlers with the lower layer
-	eth.UseARP(&arp);
-	eth.UseIPv4(&ipv4);
-	ipv4.UseICMPv4(&icmpv4);
-	ipv4.UseTCP(&tcp);
-
-	//Main event handling loop
-	while(true)
-	{
-		auto frame = iface.GetRxFrame();
-		if(frame)
-			eth.OnRxFrame(frame);
-	}
-
-	return 0;
+	payload[payloadLen] = 0;
+	printf("Got %u bytes on socket: \"%s\"\n", payloadLen, (char*)payload);
 }

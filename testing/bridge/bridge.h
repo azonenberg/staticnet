@@ -27,46 +27,15 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-#include "bridge.h"
+#ifndef bridge_h
+#define bridge_h
 
-int main(int /*argc*/, char* /*argv*/[])
-{
-	//Bring up the tap interface
-	TapEthernetInterface iface("simtap");
+#include <unistd.h>
+#include <stdio.h>
+#include <staticnet-config.h>
+#include <stack/staticnet.h>
+#include <drivers/tap/TapEthernetInterface.h>
 
-	//Address configuration
-	MACAddress mac = {{ 0x02, 0xde, 0xad, 0xbe, 0xef, 0x41 }};
-	IPv4Config ipconfig;
-	ipconfig.m_address		= { .m_octets{192, 168,   1,   2} };
-	ipconfig.m_netmask		= { .m_octets{255, 255, 255,   0} };
-	ipconfig.m_broadcast	= { .m_octets{192, 168,   1, 255} };
-	ipconfig.m_gateway		= { .m_octets{192, 168,   1,   1} };
+#include "BridgeTCPProtocol.h"
 
-	//ARP cache (shared by all interfaces)
-	ARPCache cache;
-
-	//Per-interface protocol stacks
-	EthernetProtocol eth(iface, mac);
-	ARPProtocol arp(eth, ipconfig.m_address, cache);
-
-	//Global protocol stacks
-	IPv4Protocol ipv4(eth, ipconfig, cache);
-	ICMPv4Protocol icmpv4(ipv4);
-	BridgeTCPProtocol tcp(&ipv4);
-
-	//Register protocol handlers with the lower layer
-	eth.UseARP(&arp);
-	eth.UseIPv4(&ipv4);
-	ipv4.UseICMPv4(&icmpv4);
-	ipv4.UseTCP(&tcp);
-
-	//Main event handling loop
-	while(true)
-	{
-		auto frame = iface.GetRxFrame();
-		if(frame)
-			eth.OnRxFrame(frame);
-	}
-
-	return 0;
-}
+#endif
