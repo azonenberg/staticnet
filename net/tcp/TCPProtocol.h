@@ -55,7 +55,7 @@ public:
 	/**
 		@brief Expected sequence number of the next incoming packet.
 
-		This is the most recent ACK number wet sent.
+		This is the most recent ACK number we sent.
 	 */
 	uint32_t m_remoteSeq;
 
@@ -94,6 +94,7 @@ public:
 protected:
 	virtual bool IsPortOpen(uint16_t port);
 	virtual uint32_t GenerateInitialSequenceNumber();
+	virtual void OnRxData(TCPTableEntry* state, uint8_t* payload, uint16_t payloadLen);
 
 protected:
 	void OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress);
@@ -102,23 +103,11 @@ protected:
 
 	uint16_t Hash(IPv4Address ip, uint16_t localPort, uint16_t remotePort);
 
-	uint32_t AllocateSocketHandle(uint16_t hash);
+	TCPTableEntry* AllocateSocketHandle(uint16_t hash);
+	TCPTableEntry* GetSocketState(IPv4Address ip, uint16_t localPort, uint16_t remotePort);
 	IPv4Packet* CreateReply(TCPTableEntry* state);
 
 	void SendSegment(TCPSegment* segment, IPv4Packet* packet, uint16_t length = sizeof(TCPSegment));
-
-	/**
-		@brief Gets the state for a socket given the handle
-	 */
-	TCPTableEntry* GetSocketState(uint32_t handle)
-	{
-		auto way = (handle >> 16);
-		auto row = (handle & 0xffff);
-		if( (way >= TCP_TABLE_WAYS) || (row >= TCP_TABLE_LINES) )
-			return NULL;
-
-		return &m_socketTable[way].m_lines[row];
-	}
 
 	///@brief The IPv4 protocol stack
 	IPv4Protocol* m_ipv4;
@@ -126,7 +115,5 @@ protected:
 	///@brief The socket state table
 	TCPTableWay m_socketTable[TCP_TABLE_WAYS];
 };
-
-#define INVALID_TCP_HANDLE 0xffffffff
 
 #endif

@@ -85,7 +85,6 @@ void TCPProtocol::OnRxPacket(
 
 	else if(segment->m_offsetAndFlags & TCPSegment::FLAG_ACK)
 		OnRxACK(segment, sourceAddress, payloadLen);
-
 }
 
 /**
@@ -120,8 +119,8 @@ void TCPProtocol::OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress)
 	//If so, this is a repeated SYN for an open socket (our ACK didn't make it)
 
 	//Figure out which socket table entry to use
-	auto handle = AllocateSocketHandle(Hash(sourceAddress, segment->m_destPort, segment->m_sourcePort));
-	if(handle == INVALID_TCP_HANDLE)
+	auto state = AllocateSocketHandle(Hash(sourceAddress, segment->m_destPort, segment->m_sourcePort));
+	if(state == NULL)
 	{
 		//No free socket handles available.
 		//Silently drop the connection request
@@ -129,12 +128,8 @@ void TCPProtocol::OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress)
 	}
 
 	printf("Got a SYN (requesting local port %d)\n", segment->m_destPort);
-	printf("    Socket handle %08x\n", handle);
 
 	//Fill out the initial table entry
-	auto state = GetSocketState(handle);
-	if(!state)
-		return;
 	state->m_remoteIP = sourceAddress;
 	state->m_localPort = segment->m_destPort;
 	state->m_remotePort = segment->m_sourcePort;
@@ -150,7 +145,7 @@ void TCPProtocol::OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress)
 	SendSegment(payload, reply);
 
 	//The SYN flag counts as a byte in the stream, so we expect the next ACK to be one greater than what we sent
-	state->m_remoteSeq ++;
+	state->m_localSeq ++;
 }
 
 /**
@@ -166,13 +161,48 @@ void TCPProtocol::OnRxRST(TCPSegment* /*segment*/, IPv4Address /*sourceAddress*/
  */
 void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16_t payloadLen)
 {
-	//Look up the socket handle
-	printf("Got an ACK segment\n");
+	//Look up the socket handle for this segment. Drop silently if not a valid segment
+	//TODO: should we send a RST?
+	auto state = GetSocketState(sourceAddress, segment->m_destPort, segment->m_sourcePort);
+	if(state == NULL)
+		return;
 
+	//If remote sequence number is too BIG: we missed a packet, this is the next one in line.
+	//If too SMALL: this is a duplicate packet.
+	//In either case, we don't need to do anything.
+	//TODO: Send an ACK for the last packet we *did* get?
+	if(state->m_remoteSeq != segment->m_sequence)
+		return;
 
+	//If we get here, it's the next packet in line.
+	//TODO: Check its ACK number and mark any segments we sent with smaller ACK numbers as OK
 
+	//Process the data
+	if(payloadLen > 0)
+		OnRxData(state, segment->Payload(), payloadLen);
+
+	//If no data, and not a FIN, no action needed (duplicate ACK?)
+	else if( (segment->m_offsetAndFlags & TCPSegment::FLAG_FIN) == 0)
+		return;
+
+	//Update our ACK number to the end of this segment
+	state->m_remoteSeq += payloadLen;
+
+	//Send our reply
+	auto reply = CreateReply(state);
+	auto payload = reinterpret_cast<TCPSegment*>(reply->Payload());
 	if(segment->m_offsetAndFlags & TCPSegment::FLAG_FIN)
-		printf("TODO: handle FIN\n");
+	{
+		//Set the FIN flag on the outgoing packet.
+		//FIN counts as a data byte so increment our ACK number
+		payload->m_offsetAndFlags |= TCPSegment::FLAG_FIN;
+		payload->m_ack ++;
+
+		//Connection is getting torn down, so close our socket state.
+		//Normally we'd go to TIME-WAIT but just close it right away so we can reuse the table entry.
+		state->m_valid = false;
+	}
+	SendSegment(payload, reply);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -210,7 +240,7 @@ IPv4Packet* TCPProtocol::CreateReply(TCPTableEntry* state)
 	payload->m_destPort = state->m_remotePort;
 	payload->m_sequence = state->m_localSeq;
 	payload->m_ack = state->m_remoteSeq;
-	payload->m_offsetAndFlags = (5 << 12) | TCPSegment::FLAG_PSH | TCPSegment::FLAG_ACK;
+	payload->m_offsetAndFlags = (5 << 12) | TCPSegment::FLAG_ACK;
 	payload->m_windowSize = TCP_IPV4_PAYLOAD_MTU;	//TODO: support variable window size
 	payload->m_urgent = 0;
 
@@ -239,13 +269,34 @@ uint16_t TCPProtocol::Hash(IPv4Address ip, uint16_t localPort, uint16_t remotePo
 }
 
 /**
-	@brief Finds a free space in the socket table for the given hash, then marks it as in use and returns the handle.
-
-	A socket handle is a 32-bit integer with the high 16 bits containing the way ID and the low 16 the line ID.
-
-	The special value INVALID_TCP_HANDLE is returned if there is no space in the table.
+	@brief Looks up the socket state for the given connection
  */
-uint32_t TCPProtocol::AllocateSocketHandle(uint16_t hash)
+TCPTableEntry* TCPProtocol::GetSocketState(IPv4Address ip, uint16_t localPort, uint16_t remotePort)
+{
+	auto hash = Hash(ip, localPort, remotePort);
+
+	for(size_t way=0; way < TCP_TABLE_WAYS; way ++)
+	{
+		auto& row = m_socketTable[way].m_lines[hash];
+
+		//Nothing there? No match
+		if(!row.m_valid)
+			continue;
+
+		//Check table info
+		if( (row.m_remoteIP == ip) && (row.m_localPort == localPort) && (row.m_remotePort == remotePort) )
+			return &m_socketTable[way].m_lines[hash];
+	}
+
+	//Not a valid socket
+	return NULL;
+}
+
+/**
+	@brief Finds a free space in the socket table for the given hash, then marks it as in use and returns the
+	socket state object
+ */
+TCPTableEntry* TCPProtocol::AllocateSocketHandle(uint16_t hash)
 {
 	for(size_t way=0; way < TCP_TABLE_WAYS; way ++)
 	{
@@ -259,12 +310,12 @@ uint32_t TCPProtocol::AllocateSocketHandle(uint16_t hash)
 		else
 		{
 			row.m_valid = true;
-			return (way << 16) | hash;
+			return &m_socketTable[way].m_lines[hash];
 		}
 	}
 
 	//No free entries found
-	return INVALID_TCP_HANDLE;
+	return NULL;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -290,4 +341,13 @@ uint32_t TCPProtocol::GenerateInitialSequenceNumber()
 	//generated by fair dice roll
 	//guaranteed to be random
 	return 4;
+}
+
+/**
+	@brief Handles incoming packet data
+ */
+void TCPProtocol::OnRxData(TCPTableEntry* state, uint8_t* payload, uint16_t payloadLen)
+{
+	payload[payloadLen] = 0;
+	printf("Got %u bytes on socket (to port %d): \"%s\"\n", payloadLen, state->m_localPort, (char*)payload);
 }
