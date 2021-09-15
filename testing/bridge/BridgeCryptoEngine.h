@@ -29,86 +29,18 @@
 
 /**
 	@file
-	@brief Declaration of SSHTransportServer
+	@brief Declaration of BridgeCryptoEngine
  */
-#ifndef SSHTransportServer_h
-#define SSHTransportServer_h
+#ifndef BridgeCryptoEngine_h
+#define BridgeCryptoEngine_h
 
 /**
-	@brief State for a single SSH connection
+	@brief Crypto engine class for the bridge test
  */
-class SSHConnectionState
+class BridgeCryptoEngine : public CryptoEngine
 {
 public:
-	SSHConnectionState()
-		: m_clientToServerCrypto(NULL)
-		, m_serverToClientCrypto(NULL)
-	{ Clear(); }
-
-	/**
-		@brief Clears connection state
-	 */
-	void Clear()
-	{
-		m_valid = false;
-		m_socket = NULL;
-		m_state = STATE_BANNER_SENT;
-	}
-
-	///@brief True if the connection is valid
-	bool	m_valid;
-
-	///@brief Socket state handle
-	TCPTableEntry* m_socket;
-
-	///@brief Position in the connection state machine
-	enum
-	{
-		STATE_BANNER_SENT,			//Connection opened, we sent our banner to the client
-		STATE_KEX_INIT_SENT,		//Got the banner, we sent our kex init message to the client
-	} m_state;
-
-	CryptoEngine* m_clientToServerCrypto;
-	CryptoEngine* m_serverToClientCrypto;
-};
-
-/**
-	@brief Server for the SSH transport layer (RFC 4253)
-
-	Derived classes must initialize crypto engines in the constructor.
- */
-class SSHTransportServer
-{
-public:
-	SSHTransportServer(TCPProtocol& tcp);
-
-	//Event handlers
-	void OnConnectionAccepted(TCPTableEntry* socket);
-	void OnRxData(TCPTableEntry* socket, uint8_t* payload, uint16_t payloadLen);
-
-protected:
-
-	enum sshmsg_t;
-	{
-		SSH_MSG_KEXINIT = 0x14
-	}
-
-	int GetConnectionID(TCPTableEntry* socket);
-	int AllocateConnectionID(TCPTableEntry* socket);
-
-	void OnRxBanner(int id, TCPTableEntry* socket, uint8_t* payload, uint16_t payloadLen);
-
-	///@brief The transport layer for our traffic
-	TCPProtocol& m_tcp;
-
-	///@brief The SSH connection table
-	SSHConnectionState m_state[SSH_TABLE_SIZE];
-
-	/**
-		@brief Writes a big-endian uint32_t to a buffer
-	 */
-	void WriteUint32(uint8_t* ptr, uint32_t value)
-	{ *reinterpret_cast<uint32_t*>(ptr) = __builtin_bswap32(value); }
+	BridgeCryptoEngine();
 };
 
 #endif
