@@ -41,6 +41,13 @@ class BridgeCryptoEngine : public CryptoEngine
 {
 public:
 	BridgeCryptoEngine();
+	virtual ~BridgeCryptoEngine();
+
+	virtual void GenerateRandom(uint8_t* buf, size_t len);
+	virtual void Clear();
+
+protected:
+	FILE* m_fpRandom;
 };
 
 #endif

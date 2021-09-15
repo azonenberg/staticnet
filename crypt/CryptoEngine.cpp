@@ -27,34 +27,17 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of CryptoEngine
- */
-#ifndef CryptoEngine_h
-#define CryptoEngine_h
+#include "bridge.h"
 
-/**
-	@brief Interface to an external crypto library or accelerator
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Construction / destruction
 
-	Each CryptoEngine object contains state used for one single encrypted/authenticated connection
-	(client to server or server to client)
- */
-class CryptoEngine
+CryptoEngine::CryptoEngine()
 {
-public:
-	CryptoEngine();
-	virtual ~CryptoEngine();
 
-	/**
-		@brief Generate cryptographic randomness
-	 */
-	virtual void GenerateRandom(uint8_t* buf, size_t len) =0;
+}
 
-	/**
-		@brief Zeroizes state so we can reuse the crypto engine object for a new session
-	 */
-	virtual void Clear() =0;
-};
+CryptoEngine::~CryptoEngine()
+{
 
-#endif
+}

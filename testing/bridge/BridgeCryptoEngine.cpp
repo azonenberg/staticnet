@@ -27,34 +27,40 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of CryptoEngine
- */
-#ifndef CryptoEngine_h
-#define CryptoEngine_h
+#include "bridge.h"
+#include <stdlib.h>
 
-/**
-	@brief Interface to an external crypto library or accelerator
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Construction / destruction
 
-	Each CryptoEngine object contains state used for one single encrypted/authenticated connection
-	(client to server or server to client)
- */
-class CryptoEngine
+BridgeCryptoEngine::BridgeCryptoEngine()
 {
-public:
-	CryptoEngine();
-	virtual ~CryptoEngine();
+	m_fpRandom = fopen("/dev/urandom", "rb");
+	if(m_fpRandom == NULL)
+	{
+		perror("open /dev/urandom\n");
+		exit(1);
+	}
+}
 
-	/**
-		@brief Generate cryptographic randomness
-	 */
-	virtual void GenerateRandom(uint8_t* buf, size_t len) =0;
+BridgeCryptoEngine::~BridgeCryptoEngine()
+{
+	fclose(m_fpRandom);
+}
 
-	/**
-		@brief Zeroizes state so we can reuse the crypto engine object for a new session
-	 */
-	virtual void Clear() =0;
-};
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// State reset
 
-#endif
+void BridgeCryptoEngine::Clear()
+{
+	//nothing to do yet
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// RNG
+
+void BridgeCryptoEngine::GenerateRandom(uint8_t* buf, size_t len)
+{
+	fread(buf, 1, len, m_fpRandom);
+}
+
