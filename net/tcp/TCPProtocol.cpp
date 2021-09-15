@@ -180,7 +180,11 @@ void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16
 
 	//Process the data
 	if(payloadLen > 0)
-		OnRxData(state, segment->Payload(), payloadLen);
+	{
+		//If
+		if(!OnRxData(state, segment->Payload(), payloadLen))
+			return;
+	}
 
 	//If no data, and not a FIN, no action needed (duplicate ACK?)
 	else if( (segment->m_offsetAndFlags & TCPSegment::FLAG_FIN) == 0)
@@ -377,8 +381,17 @@ uint32_t TCPProtocol::GenerateInitialSequenceNumber()
 /**
 	@brief Handles incoming packet data.
 
-	The default implementation does nothing.
+	Return true to send an ACK if everything went smoothly.
+
+	Return false if there was insufficient memory or the packet could not be processed at this time. The stack will
+	drop the packet and the sender will retransmit in the future.
+
+	The default implementation does nothing and always returns true.
+
+	@return		True if the data was processed successfully
+				False if the data could not be processed
  */
-void TCPProtocol::OnRxData(TCPTableEntry* /*state*/, uint8_t* /*payload*/, uint16_t /*payloadLen*/)
+bool TCPProtocol::OnRxData(TCPTableEntry* /*state*/, uint8_t* /*payload*/, uint16_t /*payloadLen*/)
 {
+	return true;
 }

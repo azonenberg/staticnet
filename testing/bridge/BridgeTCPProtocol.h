@@ -30,7 +30,7 @@
 #ifndef BridgeTCPProtocol_h
 #define BridgeTCPProtocol_h
 
-#include <ssh/SSHTransportServer.h>
+#include "BridgeSSHTransportServer.h"
 
 class BridgeTCPProtocol : public TCPProtocol
 {
@@ -40,9 +40,9 @@ public:
 protected:
 	virtual bool IsPortOpen(uint16_t port);
 	virtual void OnConnectionAccepted(TCPTableEntry* state);
-	virtual void OnRxData(TCPTableEntry* state, uint8_t* payload, uint16_t payloadLen);
+	virtual bool OnRxData(TCPTableEntry* state, uint8_t* payload, uint16_t payloadLen);
 
-	SSHTransportServer m_server;
+	BridgeSSHTransportServer m_server;
 };
 
 #endif

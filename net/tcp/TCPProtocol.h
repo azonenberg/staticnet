@@ -120,7 +120,7 @@ public:
 protected:
 	virtual bool IsPortOpen(uint16_t port);
 	virtual uint32_t GenerateInitialSequenceNumber();
-	virtual void OnRxData(TCPTableEntry* state, uint8_t* payload, uint16_t payloadLen);
+	virtual bool OnRxData(TCPTableEntry* state, uint8_t* payload, uint16_t payloadLen);
 	virtual void OnConnectionAccepted(TCPTableEntry* state);
 
 protected:

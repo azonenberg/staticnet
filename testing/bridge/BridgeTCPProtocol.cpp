@@ -52,12 +52,12 @@ void BridgeTCPProtocol::OnConnectionAccepted(TCPTableEntry* state)
 	m_server.OnConnectionAccepted(state);
 }
 
-void BridgeTCPProtocol::OnRxData(TCPTableEntry* state, uint8_t* payload, uint16_t payloadLen)
+bool BridgeTCPProtocol::OnRxData(TCPTableEntry* state, uint8_t* payload, uint16_t payloadLen)
 {
 	//Discard anything not to port 22
 	if(state->m_localPort != 22)
-		return;
+		return true;
 
 	//Pass the incoming traffic off to the SSH server process
-	m_server.OnRxData(state, payload, payloadLen);
+	return m_server.OnRxData(state, payload, payloadLen);
 }
