@@ -57,6 +57,9 @@
 #define TCP_TABLE_LINES 16
 
 ///@brief Maximum number of SSH connections supported
-#define SSH_TABLE_SIZE 4
+#define SSH_TABLE_SIZE 2
+
+///@brief SSH socket RX buffer size
+#define SSH_RX_BUFFER_SIZE 2048
 
 #endif

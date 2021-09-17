@@ -29,21 +29,41 @@
 
 /**
 	@file
-	@brief Declaration of BridgeSSHTransportServer
+	@brief Declaration of SSHTransportPacket
  */
-#ifndef BridgeSSHTransportServer_h
-#define BridgeSSHTransportServer_h
-
-#include <ssh/SSHTransportServer.h>
+#ifndef SSHKexInitPacket_h
+#define SSHKexInitPacket_h
 
 /**
-	@brief SSH server class for the bridge test
+	@brief A SSH_MSG_KEXINIT packet
  */
-class BridgeSSHTransportServer : public SSHTransportServer
+class __attribute__((packed)) SSHKexInitPacket
 {
 public:
-	BridgeSSHTransportServer(TCPProtocol& tcp);
-	virtual ~BridgeSSHTransportServer();
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Field accessors
+
+	/**
+		@brief Gets a pointer to the start of a name list
+	 */
+	uint8_t* GetFirstNameListStart()
+	{ return &m_cookie[0] + sizeof(m_cookie); }
+
+	uint32_t GetNameListLength(uint8_t* start);
+	char* GetNameListData(uint8_t* start);
+	uint8_t* GetNextNameListStart(uint8_t* start);
+
+	bool NameListContains(uint8_t* start, const char* search);
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Byte ordering correction
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Data fields
+
+	//Random nonce
+	uint8_t m_cookie[16];
 };
 
 #endif

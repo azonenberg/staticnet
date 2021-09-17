@@ -27,23 +27,31 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of BridgeSSHTransportServer
- */
-#ifndef BridgeSSHTransportServer_h
-#define BridgeSSHTransportServer_h
+#include "bridge.h"
 
-#include <ssh/SSHTransportServer.h>
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Construction / destruction
 
-/**
-	@brief SSH server class for the bridge test
- */
-class BridgeSSHTransportServer : public SSHTransportServer
+BridgeSSHTransportServer::BridgeSSHTransportServer(TCPProtocol& tcp)
+	: SSHTransportServer(tcp)
 {
-public:
-	BridgeSSHTransportServer(TCPProtocol& tcp);
-	virtual ~BridgeSSHTransportServer();
-};
+	//Initialize crypto engines
+	for(size_t i=0; i<SSH_TABLE_SIZE; i++)
+	{
+		m_state[i].m_clientToServerCrypto = new BridgeCryptoEngine;
+		m_state[i].m_serverToClientCrypto = new BridgeCryptoEngine;
+	}
+}
 
-#endif
+BridgeSSHTransportServer::~BridgeSSHTransportServer()
+{
+	//Clean up crypto state
+	for(size_t i=0; i<SSH_TABLE_SIZE; i++)
+	{
+		delete m_state[i].m_clientToServerCrypto;
+		delete m_state[i].m_serverToClientCrypto;
+		
+		m_state[i].m_clientToServerCrypto = NULL;
+		m_state[i].m_serverToClientCrypto = NULL;
+	}
+}

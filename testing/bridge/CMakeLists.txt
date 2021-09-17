@@ -4,6 +4,8 @@ include_directories(.)
 ###############################################################################
 #C++ compilation
 add_executable(bridge
+	../../crypt/CryptoEngine.cpp
+
 	../../drivers/base/EthernetInterface.cpp
 	../../drivers/tap/TapEthernetInterface.cpp
 
@@ -18,9 +20,13 @@ add_executable(bridge
 	../../net/tcp/TCPSegment.cpp
 	../../net/tcp/TCPProtocol.cpp
 
+	../../ssh/SSHKexInitPacket.cpp
+	../../ssh/SSHTransportPacket.cpp
 	../../ssh/SSHTransportServer.cpp
 
 	main.cpp
+	BridgeCryptoEngine.cpp
+	BridgeSSHTransportServer.cpp
 	BridgeTCPProtocol.cpp
 )
 

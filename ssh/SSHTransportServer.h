@@ -34,6 +34,12 @@
 #ifndef SSHTransportServer_h
 #define SSHTransportServer_h
 
+#include "../crypt/CryptoEngine.h"
+#include "../util/CircularFIFO.h"
+
+class SSHTransportPacket;
+class SSHKexInitPacket;
+
 /**
 	@brief State for a single SSH connection
  */
@@ -53,6 +59,12 @@ public:
 		m_valid = false;
 		m_socket = NULL;
 		m_state = STATE_BANNER_SENT;
+
+		//Zeroize crypto state
+		if(m_clientToServerCrypto)
+			m_clientToServerCrypto->Clear();
+		if(m_serverToClientCrypto)
+			m_serverToClientCrypto->Clear();
 	}
 
 	///@brief True if the connection is valid
@@ -64,12 +76,15 @@ public:
 	///@brief Position in the connection state machine
 	enum
 	{
+		STATE_BANNER_WAIT,			//connection opened, waiting for client to send banner to us
 		STATE_BANNER_SENT,			//Connection opened, we sent our banner to the client
 		STATE_KEX_INIT_SENT,		//Got the banner, we sent our kex init message to the client
 	} m_state;
 
 	CryptoEngine* m_clientToServerCrypto;
 	CryptoEngine* m_serverToClientCrypto;
+
+	CircularFIFO<SSH_RX_BUFFER_SIZE> m_rxBuffer;
 };
 
 /**
@@ -81,22 +96,24 @@ class SSHTransportServer
 {
 public:
 	SSHTransportServer(TCPProtocol& tcp);
+	virtual ~SSHTransportServer();
 
 	//Event handlers
 	void OnConnectionAccepted(TCPTableEntry* socket);
-	void OnRxData(TCPTableEntry* socket, uint8_t* payload, uint16_t payloadLen);
+	bool OnRxData(TCPTableEntry* socket, uint8_t* payload, uint16_t payloadLen);
 
 protected:
-
-	enum sshmsg_t;
-	{
-		SSH_MSG_KEXINIT = 0x14
-	}
 
 	int GetConnectionID(TCPTableEntry* socket);
 	int AllocateConnectionID(TCPTableEntry* socket);
 
-	void OnRxBanner(int id, TCPTableEntry* socket, uint8_t* payload, uint16_t payloadLen);
+	void OnRxBanner(int id, TCPTableEntry* socket);
+	void OnRxKexInit(int id, TCPTableEntry* socket);
+	bool ValidateKexInit(int id, SSHKexInitPacket* kex);
+
+	bool IsPacketReady(SSHConnectionState& state);
+	SSHTransportPacket* PeekPacket(SSHConnectionState& state);
+	void PopPacket(SSHConnectionState& state);
 
 	///@brief The transport layer for our traffic
 	TCPProtocol& m_tcp;

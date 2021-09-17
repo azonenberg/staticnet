@@ -27,23 +27,69 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of BridgeSSHTransportServer
- */
-#ifndef BridgeSSHTransportServer_h
-#define BridgeSSHTransportServer_h
+#include <stdio.h>
 
-#include <ssh/SSHTransportServer.h>
+#include <staticnet-config.h>
+#include <stack/staticnet.h>
+#include "SSHTransportServer.h"
+#include "SSHTransportPacket.h"
+#include "SSHKexInitPacket.h"
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Field accessors
 
 /**
-	@brief SSH server class for the bridge test
+	@brief Gets the length of a name list, given a pointer to the start
  */
-class BridgeSSHTransportServer : public SSHTransportServer
+uint32_t SSHKexInitPacket::GetNameListLength(uint8_t* start)
 {
-public:
-	BridgeSSHTransportServer(TCPProtocol& tcp);
-	virtual ~BridgeSSHTransportServer();
-};
+	return __builtin_bswap32(*reinterpret_cast<uint32_t*>(start));
+}
 
-#endif
+/**
+	@brief Gets the data of a name list, given a pointer to the start
+
+	Note: The name list is NOT null terminated!
+ */
+char* SSHKexInitPacket::GetNameListData(uint8_t* start)
+{
+	return reinterpret_cast<char*>(start + sizeof(uint32_t));
+}
+
+/**
+	@brief Gets the start of the next name list, given a pointer to the start of this one
+ */
+uint8_t* SSHKexInitPacket::GetNextNameListStart(uint8_t* start)
+{
+	return start + sizeof(uint32_t) + GetNameListLength(start);
+}
+
+/**
+	@brief Searches a name list for a requested substring
+ */
+bool SSHKexInitPacket::NameListContains(uint8_t* start, const char* search)
+{
+	auto len = GetNameListLength(start);
+	auto data = GetNameListData(start);
+
+	//Check each substring in the name list for a match
+	uint32_t targetlen = strlen(search);
+	uint32_t pos = 0;
+	while(pos < (len - targetlen))
+	{
+		//Check this string for a match (must be exact match, not just prefix)
+		if( (memcmp(data+pos, search, targetlen) == 0) &&
+			( (pos+targetlen == len) || (data[pos+targetlen] == ',') ) )
+		{
+			return true;
+		}
+
+		//Nope, not a match. Skip ahead to the next comma or end of string.
+		while( (data[pos] != ',') && (pos < len) )
+			pos ++;
+		pos ++;
+	}
+
+	//If we get to the end without a match, stop
+	return false;
+}

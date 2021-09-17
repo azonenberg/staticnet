@@ -27,23 +27,45 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of BridgeSSHTransportServer
- */
-#ifndef BridgeSSHTransportServer_h
-#define BridgeSSHTransportServer_h
+#include <stdio.h>
 
-#include <ssh/SSHTransportServer.h>
+#include <staticnet-config.h>
+#include <stack/staticnet.h>
+#include "SSHTransportServer.h"
+#include "SSHTransportPacket.h"
 
-/**
-	@brief SSH server class for the bridge test
- */
-class BridgeSSHTransportServer : public SSHTransportServer
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Byte ordering correction
+
+void SSHTransportPacket::ByteSwap()
 {
-public:
-	BridgeSSHTransportServer(TCPProtocol& tcp);
-	virtual ~BridgeSSHTransportServer();
-};
+	m_packetLength = __builtin_bswap32(m_packetLength);
+}
 
-#endif
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Header stuff
+
+/**
+	@brief Fills out the length field in the packet header and appends random padding
+ */
+void SSHTransportPacket::UpdateLength(uint16_t payloadLength, CryptoEngine* crypto)
+{
+	//We need a minimum of 4 bytes of padding
+	m_paddingLength = 4;
+
+	//Total packet length assuming minimum padding size
+	//Padding length and type are counted towards total length, but the length field itself is not
+	m_packetLength = payloadLength + m_paddingLength + 2;
+
+	//Add extra padding until we hit a multiple of 8 bytes
+	uint32_t paddingMod8 = m_packetLength % 8;
+	if(paddingMod8 != 0)
+	{
+		uint32_t extraPaddingToAdd = 8 - paddingMod8;
+		m_paddingLength += extraPaddingToAdd;
+		m_packetLength += extraPaddingToAdd;
+	}
+
+	//Fill the padding with random data
+	crypto->GenerateRandom(Payload() + payloadLength, m_paddingLength);
+}

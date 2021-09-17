@@ -29,21 +29,51 @@
 
 /**
 	@file
-	@brief Declaration of BridgeSSHTransportServer
+	@brief Declaration of SSHTransportPacket
  */
-#ifndef BridgeSSHTransportServer_h
-#define BridgeSSHTransportServer_h
+#ifndef SSHTransportPacket_h
+#define SSHTransportPacket_h
 
-#include <ssh/SSHTransportServer.h>
+class CryptoEngine;
 
 /**
-	@brief SSH server class for the bridge test
+	@brief A single packet in the SSH transport layer
  */
-class BridgeSSHTransportServer : public SSHTransportServer
+class __attribute__((packed)) SSHTransportPacket
 {
 public:
-	BridgeSSHTransportServer(TCPProtocol& tcp);
-	virtual ~BridgeSSHTransportServer();
+
+	enum sshmsg_t
+	{
+		SSH_MSG_KEXINIT = 0x14
+	};
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Padding / cleanup
+
+	void UpdateLength(uint16_t payloadLength, CryptoEngine* crypto);
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Field accessors
+
+	uint8_t* Payload()
+	{ return reinterpret_cast<uint8_t*>(this) + sizeof(SSHTransportPacket); }
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Byte ordering correction
+
+	void ByteSwap();
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Data fields
+
+	uint32_t m_packetLength;	//does not include the length field itself!
+	uint8_t m_paddingLength;
+	uint8_t m_type;
+
+	//After packet:
+	//uint8_t padding[]
+	//uint8_t mac[] (not present in AEAD modes)
 };
 
 #endif

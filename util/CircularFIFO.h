@@ -29,21 +29,148 @@
 
 /**
 	@file
-	@brief Declaration of BridgeSSHTransportServer
+	@brief Declaration of CircularFIFO
  */
-#ifndef BridgeSSHTransportServer_h
-#define BridgeSSHTransportServer_h
+#ifndef CircularFIFO_h
+#define CircularFIFO_h
 
-#include <ssh/SSHTransportServer.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 /**
-	@brief SSH server class for the bridge test
+	@brief A circular buffer for storing byte-stream data which supports arbitrary length reads, writes, and peeks.
+
+	Pointers are 16 bit to reduce the memory footprint. One extra address is required to distinguish between
+	empty and full positions so the maximum legal value for SIZE is 2^16 - 1.
+
+	This class has no interlocks and is not thread/interrupt safe.
  */
-class BridgeSSHTransportServer : public SSHTransportServer
+template<uint16_t SIZE>
+class CircularFIFO
 {
 public:
-	BridgeSSHTransportServer(TCPProtocol& tcp);
-	virtual ~BridgeSSHTransportServer();
+	CircularFIFO()
+	{ Reset(); }
+
+	/**
+		@brief Clears the FIFO to an empty state
+	 */
+	void Reset()
+	{
+		m_readPtr = 0;
+		m_writePtr = 0;
+	}
+
+	/**
+		@brief Returns the number of bytes of data available to read
+	 */
+	uint16_t ReadSize()
+	{ return m_writePtr - m_readPtr; }
+
+	/**
+		@brief Returns the number of bytes of free buffer space
+	 */
+	uint16_t WriteSize()
+	{ return SIZE - ReadSize(); }
+
+	/**
+		@brief Pushes a buffer of data into the FIFO
+
+		Writes are all-or-nothing. If len > WriteSize() this function returns false and the FIFO state is unmodified.
+	 */
+	bool Push(uint8_t* data, uint16_t len)
+	{
+		if(len > WriteSize())
+			return false;
+
+		//TODO: optimized version using memcpy
+		//(note that we need to handle wraparound)
+		for(uint16_t i=0; i<len; i++)
+			Push(data[i]);
+		return true;
+	}
+
+	/**
+		@brief Pushes a single byte of data into the FIFO
+
+		Returns true if there was a free byte or false if not.
+	 */
+	bool Push(uint8_t c)
+	{
+		if(WriteSize() == 0)
+			return false;
+
+		m_data[m_writePtr] = c;
+		m_writePtr = IncrementPointer(m_writePtr);
+		return true;
+	}
+
+	/**
+		@brief Pops a single byte of data from the FIFO
+	 */
+	uint8_t Pop()
+	{
+		if(ReadSize() == 0)
+			return 0;
+
+		uint8_t ret = m_data[m_readPtr];
+		m_readPtr = IncrementPointer(m_readPtr);
+		return ret;
+	}
+
+	/**
+		@brief Pops a block of data from the FIFO
+	 */
+	void Pop(uint16_t size)
+	{
+		//cap size
+		if(size > ReadSize())
+			size = ReadSize();
+
+		//TODO: be efficient
+		for(uint16_t i=0; i<size; i++)
+			Pop();
+	}
+
+	/**
+		@brief Rotates the buffer such that the read pointer is now at zero and returns a pointer to the data
+	 */
+	uint8_t* Rewind()
+	{
+		//Figure out how many spaces we need to rewind the buffer by
+		uint16_t nbytes = ReadSize();
+		//uint16_t nrotate = m_readPtr;
+
+		//Easy case: buffer hasn't wrapped past zero yet
+		//Just move the data left in place
+		if(m_writePtr > m_readPtr)
+			memmove(m_data, m_data + m_readPtr, nbytes);
+
+		//Hard case: there's data where we want to go
+		else
+		{
+			//This will take several moves, not sure on details yet...
+			printf("hard rewind not implemented\n");
+			exit(1);
+		}
+
+		//Done
+		m_readPtr = 0;
+		m_writePtr = nbytes;
+		return m_data;
+	}
+
+protected:
+
+	/**
+		@brief Increments a pointer mod our buffer size
+	 */
+	uint16_t IncrementPointer(uint16_t p)
+	{ return (p + 1) % SIZE; }
+
+	uint16_t m_writePtr;
+	uint16_t m_readPtr;
+	uint8_t m_data[SIZE];
 };
 
 #endif

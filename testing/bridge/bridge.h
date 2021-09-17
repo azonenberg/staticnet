@@ -37,5 +37,6 @@
 #include <drivers/tap/TapEthernetInterface.h>
 
 #include "BridgeTCPProtocol.h"
+#include "BridgeCryptoEngine.h"
 
 #endif
