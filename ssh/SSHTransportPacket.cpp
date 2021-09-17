@@ -58,7 +58,7 @@ void SSHTransportPacket::UpdateLength(uint16_t payloadLength, CryptoEngine* cryp
 	m_packetLength = payloadLength + m_paddingLength + 2;
 
 	//Add extra padding until we hit a multiple of 8 bytes
-	uint32_t paddingMod8 = m_packetLength % 8;
+	uint32_t paddingMod8 = (m_packetLength + sizeof(uint32_t)) % 8;
 	if(paddingMod8 != 0)
 	{
 		uint32_t extraPaddingToAdd = 8 - paddingMod8;

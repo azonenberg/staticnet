@@ -93,3 +93,17 @@ bool SSHKexInitPacket::NameListContains(uint8_t* start, const char* search)
 	//If we get to the end without a match, stop
 	return false;
 }
+
+/**
+	@brief Writes a name list to the specified address
+ */
+void SSHKexInitPacket::SetNameList(uint8_t* start, const char* str)
+{
+	auto len = strlen(str);
+
+	//Write the length
+	*reinterpret_cast<uint32_t*>(start) = __builtin_bswap32(len);
+
+	//Write the payload
+	memcpy(start + sizeof(uint32_t), str, len);
+}

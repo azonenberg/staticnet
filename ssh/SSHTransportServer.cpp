@@ -35,6 +35,13 @@
 #include "SSHTransportPacket.h"
 #include "SSHKexInitPacket.h"
 
+//Our single supported cipher suite
+static const char* g_sshKexAlg			= "curve25519-sha256";
+static const char* g_sshHostKeyAlg		= "ssh-ed25519";
+static const char* g_sshEncryptionAlg	= "aes128-gcm@openssh.com";
+static const char* g_sshMacAlg			= "none";	//implicit in GCM
+static const char* g_sshCompressionAlg	= "none";
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
 
@@ -235,70 +242,65 @@ void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 	//TODO: save the nonce from the kex init packet
 
 	//Prepare to reply with a key exchange init packet
-	/*
 	auto segment = m_tcp.GetTxSegment(socket);
 	auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
-
-
-	//Fill out the contents
-	uint16_t len = 0;
 	packet->m_type = SSHTransportPacket::SSH_MSG_KEXINIT;
 
+	//Set up the nonce
+	auto replyStart = packet->Payload();
+	auto kexOut = reinterpret_cast<SSHKexInitPacket*>(replyStart);
+	m_state[id].m_serverToClientCrypto->GenerateRandom(kexOut->m_cookie, sizeof(kexOut->m_cookie));
+	//TODO: save the nonce so we can use it for the actual key exchange
+
+	//Kex algorithms
+	auto offset = kexOut->GetFirstNameListStart();
+	kexOut->SetNameList(offset, g_sshKexAlg);
+
+	//Host key alg
+	offset = kexOut->GetNextNameListStart(offset);
+	kexOut->SetNameList(offset, g_sshHostKeyAlg);
+
+	//Encryption algorithms (client to server, then server to client)
+	offset = kexOut->GetNextNameListStart(offset);
+	kexOut->SetNameList(offset, g_sshEncryptionAlg);
+	offset = kexOut->GetNextNameListStart(offset);
+	kexOut->SetNameList(offset, g_sshEncryptionAlg);
+
+	//MAC algorithms (client to server, then server to client)
+	offset = kexOut->GetNextNameListStart(offset);
+	kexOut->SetNameList(offset, g_sshMacAlg);
+	offset = kexOut->GetNextNameListStart(offset);
+	kexOut->SetNameList(offset, g_sshMacAlg);
+
+	//Compression algorithms (client to server, then server to client)
+	offset = kexOut->GetNextNameListStart(offset);
+	kexOut->SetNameList(offset, g_sshCompressionAlg);
+	offset = kexOut->GetNextNameListStart(offset);
+	kexOut->SetNameList(offset, g_sshCompressionAlg);
+
+	//Languages (client to server, then server to client)
+	offset = kexOut->GetNextNameListStart(offset);
+	kexOut->SetNameList(offset, "");
+	offset = kexOut->GetNextNameListStart(offset);
+	kexOut->SetNameList(offset, "");
+
+	//Done with name lists
+	//Add first_kext_packet_follows
+	offset = kexOut->GetNextNameListStart(offset);
+	*offset = 0;
+	offset ++;
+
+	//Add reserved field
+	*reinterpret_cast<uint32_t*>(offset) = 0;
+	offset += sizeof(uint32_t);
+
 	//Add padding and calculate length
-	packet->UpdateLength(len, m_state[id].m_serverToClientCrypto);
+	packet->UpdateLength(offset - replyStart, m_state[id].m_serverToClientCrypto);
+	auto len = packet->m_packetLength + sizeof(uint32_t);
 	packet->ByteSwap();
 
-	//0-3: packet length TBD
-	//4: padding length TBD
-
-	//5: type
-	*/
-	/*
-		Crypto negotiation header
-
-		uint32_t packet_length
-		uint8_t padding_length (must be at least 4)
-		payload
-			byte type = SSH_MSG_KEXINIT
-			byte[16] random_cookie
-			name-list kex_algorithms
-				uint32_t length
-				curve25519-sha256
-			name-list server_host_key_algorithms
-				uint32_t length
-				ssh-ed25519
-			name-list encryption_algorithms_client_to_server
-				uint32_t length
-				aes128-gcm@openssh.com
-			name-list encryption_algorithms_server_to_client
-				uint32_t length
-				aes128-gcm@openssh.com
-			name-list mac_algorithms_client_to_server
-				uint32_t length
-				none
-			name-list mac_algorithms_server_to_client
-				uint32_t length
-				none
-			name-list compression_algorithms_client_to_server
-				uint32_t length
-				none
-			name-list compression_algorithms_server_to_client
-				uint32_t length
-				none
-			name-list languages_client_to_server
-				uint32_t length = 0
-			name-list languages_server_to_client
-				uint32_t length = 0
-			bool	first_kext_packet_follows = 0
-			uint32 reserved = 0
-		uint8_t padding[]
-		(no mac yet)
-
-		Total packet length after padding must be a multiple of 8
-	 */
-
 	//Done, send it
-	//m_tcp.SendTxSegment(socket, segment, sizeof(banner)-1);
+	m_tcp.SendTxSegment(socket, segment, len);
 	m_state[id].m_state = SSHConnectionState::STATE_KEX_INIT_SENT;
 
 	//Done, pop the packet
@@ -312,40 +314,40 @@ bool SSHTransportServer::ValidateKexInit(int id, SSHKexInitPacket* kex)
 {
 	//First name list: kex algorithms
 	auto offset = kex->GetFirstNameListStart();
-	if(!kex->NameListContains(offset, "curve25519-sha256"))
+	if(!kex->NameListContains(offset, g_sshKexAlg))
 		return false;
 
 	//Server host key algorithms
 	offset = kex->GetNextNameListStart(offset);
-	if(!kex->NameListContains(offset, "ssh-ed25519"))
+	if(!kex->NameListContains(offset, g_sshHostKeyAlg))
 		return false;
 
 	//Encryption algorithms (client to server)
 	offset = kex->GetNextNameListStart(offset);
-	if(!kex->NameListContains(offset, "aes128-gcm@openssh.com"))
+	if(!kex->NameListContains(offset, g_sshEncryptionAlg))
 		return false;
 
 	//Encryption algorithms (server to client)
 	offset = kex->GetNextNameListStart(offset);
-	if(!kex->NameListContains(offset, "aes128-gcm@openssh.com"))
+	if(!kex->NameListContains(offset, g_sshEncryptionAlg))
 		return false;
 
 	//MAC algorithms (client to server)
-	//Ignore this, AEAD modes don't use a MAC
+	//Ignore this, AEAD modes don't use a MAC (client may not actually advertise "none")
 	offset = kex->GetNextNameListStart(offset);
 
 	//MAC algorithms (server to client)
-	//Ignore this, AEAD modes don't use a MAC
+	//Ignore this, AEAD modes don't use a MAC (client may not actually advertise "none")
 	offset = kex->GetNextNameListStart(offset);
 
 	//Compression algorithms (client to server)
 	offset = kex->GetNextNameListStart(offset);
-	if(!kex->NameListContains(offset, "none"))
+	if(!kex->NameListContains(offset, g_sshCompressionAlg))
 		return false;
 
 	//Compression algorithms (server to client)
 	offset = kex->GetNextNameListStart(offset);
-	if(!kex->NameListContains(offset, "none"))
+	if(!kex->NameListContains(offset, g_sshCompressionAlg))
 		return false;
 
 	//Languages (client to server)
