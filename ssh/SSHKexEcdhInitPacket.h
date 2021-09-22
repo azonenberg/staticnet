@@ -29,39 +29,29 @@
 
 /**
 	@file
-	@brief Declaration of SSHKexInitPacket
+	@brief Declaration of SSHKexEcdhInitPacket
  */
-#ifndef SSHKexInitPacket_h
-#define SSHKexInitPacket_h
+#ifndef SSHKexEcdhInitPacket_h
+#define SSHKexEcdhInitPacket_h
 
 /**
-	@brief A SSH_MSG_KEXINIT packet
+	@brief A SSH_MSG_KEX_ECDH_INIT packet
  */
-class __attribute__((packed)) SSHKexInitPacket
+class __attribute__((packed)) SSHKexEcdhInitPacket
 {
 public:
 
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Field accessors
-
-	/**
-		@brief Gets a pointer to the start of a name list
-	 */
-	uint8_t* GetFirstNameListStart()
-	{ return &m_cookie[0] + sizeof(m_cookie); }
-
-	uint32_t GetNameListLength(uint8_t* start);
-	char* GetNameListData(uint8_t* start);
-	uint8_t* GetNextNameListStart(uint8_t* start);
-
-	bool NameListContains(uint8_t* start, const char* search);
-	void SetNameList(uint8_t* start, const char* str);
+	void ByteSwap()
+	{ m_length = __builtin_bswap32(m_length); }
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Data fields
 
-	//Random nonce
-	uint8_t m_cookie[16];
+	///@brief Ephemeral public key length. Always 32 for curve25519.
+	uint32_t m_length;
+
+	///@brief The actual public key
+	uint8_t m_publicKey[32];
 };
 
 #endif

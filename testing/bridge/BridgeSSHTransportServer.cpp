@@ -37,10 +37,7 @@ BridgeSSHTransportServer::BridgeSSHTransportServer(TCPProtocol& tcp)
 {
 	//Initialize crypto engines
 	for(size_t i=0; i<SSH_TABLE_SIZE; i++)
-	{
-		m_state[i].m_clientToServerCrypto = new BridgeCryptoEngine;
-		m_state[i].m_serverToClientCrypto = new BridgeCryptoEngine;
-	}
+		m_state[i].m_crypto = new BridgeCryptoEngine;
 }
 
 BridgeSSHTransportServer::~BridgeSSHTransportServer()
@@ -48,10 +45,7 @@ BridgeSSHTransportServer::~BridgeSSHTransportServer()
 	//Clean up crypto state
 	for(size_t i=0; i<SSH_TABLE_SIZE; i++)
 	{
-		delete m_state[i].m_clientToServerCrypto;
-		delete m_state[i].m_serverToClientCrypto;
-		
-		m_state[i].m_clientToServerCrypto = NULL;
-		m_state[i].m_serverToClientCrypto = NULL;
+		delete m_state[i].m_crypto;
+		m_state[i].m_crypto = NULL;
 	}
 }

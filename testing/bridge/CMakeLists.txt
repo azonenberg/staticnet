@@ -20,9 +20,12 @@ add_executable(bridge
 	../../net/tcp/TCPSegment.cpp
 	../../net/tcp/TCPProtocol.cpp
 
+	../../ssh/SSHKexEcdhReplyPacket.cpp
 	../../ssh/SSHKexInitPacket.cpp
 	../../ssh/SSHTransportPacket.cpp
 	../../ssh/SSHTransportServer.cpp
+
+	../../contrib/tweetnacl_25519.cpp
 
 	main.cpp
 	BridgeCryptoEngine.cpp

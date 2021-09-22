@@ -45,7 +45,10 @@ public:
 
 	enum sshmsg_t
 	{
-		SSH_MSG_KEXINIT = 0x14
+		SSH_MSG_KEXINIT			= 0x14,
+
+		SSH_MSG_KEX_ECDH_INIT 	= 0x1e,
+		SSH_MSG_KEX_ECDH_REPLY	= 0x1f
 	};
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

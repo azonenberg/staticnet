@@ -27,41 +27,24 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of SSHKexInitPacket
- */
-#ifndef SSHKexInitPacket_h
-#define SSHKexInitPacket_h
+#include <stdio.h>
 
-/**
-	@brief A SSH_MSG_KEXINIT packet
- */
-class __attribute__((packed)) SSHKexInitPacket
+#include <staticnet-config.h>
+#include <stack/staticnet.h>
+#include "SSHTransportServer.h"
+#include "SSHTransportPacket.h"
+#include "SSHKexEcdhReplyPacket.h"
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Byte ordering correction
+
+void SSHKexEcdhReplyPacket::ByteSwap()
 {
-public:
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Field accessors
-
-	/**
-		@brief Gets a pointer to the start of a name list
-	 */
-	uint8_t* GetFirstNameListStart()
-	{ return &m_cookie[0] + sizeof(m_cookie); }
-
-	uint32_t GetNameListLength(uint8_t* start);
-	char* GetNameListData(uint8_t* start);
-	uint8_t* GetNextNameListStart(uint8_t* start);
-
-	bool NameListContains(uint8_t* start, const char* search);
-	void SetNameList(uint8_t* start, const char* str);
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Data fields
-
-	//Random nonce
-	uint8_t m_cookie[16];
-};
-
-#endif
+	m_hostKeyLength = __builtin_bswap32(m_hostKeyLength);
+	m_hostKeyTypeLength = __builtin_bswap32(m_hostKeyTypeLength);
+	m_hostKeyPublicLength = __builtin_bswap32(m_hostKeyPublicLength);
+	m_ephemeralKeyPublicLength = __builtin_bswap32(m_ephemeralKeyPublicLength);
+	m_signatureBlobLength = __builtin_bswap32(m_signatureBlobLength);
+	m_signatureTypeLength = __builtin_bswap32(m_signatureTypeLength);
+	m_signatureLength = __builtin_bswap32(m_signatureLength);
+}

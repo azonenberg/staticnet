@@ -141,16 +141,25 @@ public:
 		uint16_t nbytes = ReadSize();
 		//uint16_t nrotate = m_readPtr;
 
+		//If we're already rewound, we're done already
+		if(m_readPtr == 0)
+			return m_data;
+
+		//If empty, just reset pointers (no data to copy)
+		else if(m_writePtr == m_readPtr)
+		{}
+
 		//Easy case: buffer hasn't wrapped past zero yet
 		//Just move the data left in place
-		if(m_writePtr > m_readPtr)
+		else if(m_writePtr > m_readPtr)
 			memmove(m_data, m_data + m_readPtr, nbytes);
 
 		//Hard case: there's data where we want to go
 		else
 		{
 			//This will take several moves, not sure on details yet...
-			printf("hard rewind not implemented\n");
+			printf("hard rewind not implemented (m_writePtr = %d, m_readPtr = %d, nbytes = %d)\n",
+				m_writePtr, m_readPtr, nbytes);
 			exit(1);
 		}
 

@@ -34,10 +34,23 @@
 
 CryptoEngine::CryptoEngine()
 {
-
+	memset(m_ephemeralkeyPriv, 0, sizeof(m_ephemeralkeyPriv));
 }
 
 CryptoEngine::~CryptoEngine()
 {
 
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Zeroization
+
+/**
+	@brief Zeroizes per-connection state so we can reuse the crypto engine object for a new session.
+
+	Does not zeroize long-lived host keys.
+*/
+void CryptoEngine::Clear()
+{
+	memset(m_ephemeralkeyPriv, 0, sizeof(m_ephemeralkeyPriv));
 }

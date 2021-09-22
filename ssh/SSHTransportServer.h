@@ -47,8 +47,7 @@ class SSHConnectionState
 {
 public:
 	SSHConnectionState()
-		: m_clientToServerCrypto(NULL)
-		, m_serverToClientCrypto(NULL)
+		: m_crypto(NULL)
 	{ Clear(); }
 
 	/**
@@ -61,10 +60,8 @@ public:
 		m_state = STATE_BANNER_SENT;
 
 		//Zeroize crypto state
-		if(m_clientToServerCrypto)
-			m_clientToServerCrypto->Clear();
-		if(m_serverToClientCrypto)
-			m_serverToClientCrypto->Clear();
+		if(m_crypto)
+			m_crypto->Clear();
 	}
 
 	///@brief True if the connection is valid
@@ -77,12 +74,13 @@ public:
 	enum
 	{
 		STATE_BANNER_WAIT,			//connection opened, waiting for client to send banner to us
+
 		STATE_BANNER_SENT,			//Connection opened, we sent our banner to the client
 		STATE_KEX_INIT_SENT,		//Got the banner, we sent our kex init message to the client
+		STATE_KEX_ECDHINIT_SENT,	//Got the client's ECDH ephemeral key and sent ours
 	} m_state;
 
-	CryptoEngine* m_clientToServerCrypto;
-	CryptoEngine* m_serverToClientCrypto;
+	CryptoEngine* m_crypto;
 
 	CircularFIFO<SSH_RX_BUFFER_SIZE> m_rxBuffer;
 };
@@ -109,7 +107,8 @@ protected:
 
 	void OnRxBanner(int id, TCPTableEntry* socket);
 	void OnRxKexInit(int id, TCPTableEntry* socket);
-	bool ValidateKexInit(int id, SSHKexInitPacket* kex);
+	bool ValidateKexInit(SSHKexInitPacket* kex);
+	void OnRxKexEcdhInit(int id, TCPTableEntry* socket);
 
 	bool IsPacketReady(SSHConnectionState& state);
 	SSHTransportPacket* PeekPacket(SSHConnectionState& state);

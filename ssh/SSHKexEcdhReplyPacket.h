@@ -29,39 +29,67 @@
 
 /**
 	@file
-	@brief Declaration of SSHKexInitPacket
+	@brief Declaration of SSHKexEcdhReplyPacket
  */
-#ifndef SSHKexInitPacket_h
-#define SSHKexInitPacket_h
+#ifndef SSHKexEcdhReplyPacket_h
+#define SSHKexEcdhReplyPacket_h
 
 /**
-	@brief A SSH_MSG_KEXINIT packet
+	@brief A SSH_MSG_KEX_ECDH_REPLY packet
  */
-class __attribute__((packed)) SSHKexInitPacket
+class __attribute__((packed)) SSHKexEcdhReplyPacket
 {
 public:
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Field accessors
+	// Byte ordering correction
 
-	/**
-		@brief Gets a pointer to the start of a name list
-	 */
-	uint8_t* GetFirstNameListStart()
-	{ return &m_cookie[0] + sizeof(m_cookie); }
-
-	uint32_t GetNameListLength(uint8_t* start);
-	char* GetNameListData(uint8_t* start);
-	uint8_t* GetNextNameListStart(uint8_t* start);
-
-	bool NameListContains(uint8_t* start, const char* search);
-	void SetNameList(uint8_t* start, const char* str);
+	void ByteSwap();
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Data fields
+	// Server host key
 
-	//Random nonce
-	uint8_t m_cookie[16];
+	///@brief Length of the host key blob (always 51)
+	uint32_t m_hostKeyLength;
+
+	///@brief Length of the host key type (always 11)
+	uint32_t m_hostKeyTypeLength;
+
+	///@brief Type of the host key (always "ssh-ed25519" with no null terminator)
+	char m_hostKeyType[11];
+
+	///@brief Length of the host public key (always 32)
+	uint32_t m_hostKeyPublicLength;
+
+	///@brief The actual host public key
+	uint8_t m_hostKeyPublic[32];
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Ephemeral public key
+
+	///@brief Length of the ephemeral public key (always 32)
+	uint32_t m_ephemeralKeyPublicLength;
+
+	///@brief The ephemeral public key blob
+	uint8_t m_ephemeralKeyPublic[32];
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Signature
+
+	///@brief Length of the signature blob (always 83)
+	uint32_t m_signatureBlobLength;
+
+	///@brief Length of the signature type string (always 11)
+	uint32_t m_signatureTypeLength;
+
+	///@brief The signature type string (always "ssh-ed25519" with no null terminator)
+	char m_signatureType[11];
+
+	///@brief Length of the actual signature (always 64)
+	uint32_t m_signatureLength;
+
+	///@brief The actual signature over the exchange hash
+	uint8_t m_signature[64];
 };
 
 #endif

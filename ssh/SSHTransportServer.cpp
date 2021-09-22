@@ -34,9 +34,11 @@
 #include "SSHTransportServer.h"
 #include "SSHTransportPacket.h"
 #include "SSHKexInitPacket.h"
+#include "SSHKexEcdhInitPacket.h"
+#include "SSHKexEcdhReplyPacket.h"
 
 //Our single supported cipher suite
-static const char* g_sshKexAlg			= "curve25519-sha256";
+static const char* g_sshKexAlg			= "curve25519-sha256";				//RFC 8731
 static const char* g_sshHostKeyAlg		= "ssh-ed25519";
 static const char* g_sshEncryptionAlg	= "aes128-gcm@openssh.com";
 static const char* g_sshMacAlg			= "none";	//implicit in GCM
@@ -120,28 +122,40 @@ bool SSHTransportServer::OnRxData(TCPTableEntry* socket, uint8_t* payload, uint1
 	if(!m_state[id].m_rxBuffer.Push(payload, payloadLen))
 		return false;
 
-	/*
-		TODO: the dispatch code below assumes that multiple TCP segments can be combined into a single SSH PDU,
-		but only calls the parsers once per TCP segment. This means that if two SSH PDUs occupy a single TCP segment,
-		the second PDU will not be processed until another TCP segment arrives.
-	 */
-
-	//Figure out what state we're in so we know what to expect
-	switch(m_state[id].m_state)
+	//If waiting for a client banner, special handling needed (not the normal packet format)
+	if(m_state[id].m_state == SSHConnectionState::STATE_BANNER_WAIT)
 	{
-		//Wait for the incoming banner
-		case SSHConnectionState::STATE_BANNER_WAIT:
-			OnRxBanner(id, socket);
-			break;
+		OnRxBanner(id, socket);
+		return true;
+	}
 
-		//Wait for the incoming key exchange request
-		case SSHConnectionState::STATE_BANNER_SENT:
-			OnRxKexInit(id, socket);
-			break;
+	//Everything else uses the normal SSH packet framing.
+	//Process packets (might be several concatenated in a single TCP segment)
+	while(IsPacketReady(m_state[id]))
+	{
+		//Figure out what state we're in so we know what to expect
+		switch(m_state[id].m_state)
+		{
+			//never used, just to prevent compiler warnings about unhandled cases
+			case SSHConnectionState::STATE_BANNER_WAIT:
+				break;
 
-		default:
-			printf("unknown state\n");
-			break;
+			//Setup / key exchange
+			case SSHConnectionState::STATE_BANNER_SENT:
+				OnRxKexInit(id, socket);
+				break;
+
+			case SSHConnectionState::STATE_KEX_INIT_SENT:
+				OnRxKexEcdhInit(id, socket);
+				break;
+
+			default:
+				printf("unknown state\n");
+				break;
+		}
+
+		//Whatever it was, we're done with it. On to th enext one.
+		PopPacket(m_state[id]);
 	}
 
 	return true;
@@ -216,10 +230,6 @@ void SSHTransportServer::OnRxBanner(int id, TCPTableEntry* socket)
  */
 void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 {
-	//Wait until we have a whole packet ready to read
-	if(!IsPacketReady(m_state[id]))
-		return;
-
 	//Read the packet and make sure it's the right type. If not, drop the connection
 	auto pack = PeekPacket(m_state[id]);
 	pack->ByteSwap();
@@ -232,7 +242,7 @@ void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 
 	//Validate the inbound kex init packet
 	auto kexInit = reinterpret_cast<SSHKexInitPacket*>(pack->Payload());
-	if(!ValidateKexInit(id, kexInit))
+	if(!ValidateKexInit(kexInit))
 	{
 		m_state[id].Clear();
 		m_tcp.CloseSocket(socket);
@@ -249,7 +259,7 @@ void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 	//Set up the nonce
 	auto replyStart = packet->Payload();
 	auto kexOut = reinterpret_cast<SSHKexInitPacket*>(replyStart);
-	m_state[id].m_serverToClientCrypto->GenerateRandom(kexOut->m_cookie, sizeof(kexOut->m_cookie));
+	m_state[id].m_crypto->GenerateRandom(kexOut->m_cookie, sizeof(kexOut->m_cookie));
 	//TODO: save the nonce so we can use it for the actual key exchange
 
 	//Kex algorithms
@@ -295,22 +305,19 @@ void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 	offset += sizeof(uint32_t);
 
 	//Add padding and calculate length
-	packet->UpdateLength(offset - replyStart, m_state[id].m_serverToClientCrypto);
+	packet->UpdateLength(offset - replyStart, m_state[id].m_crypto);
 	auto len = packet->m_packetLength + sizeof(uint32_t);
 	packet->ByteSwap();
 
 	//Done, send it
 	m_tcp.SendTxSegment(socket, segment, len);
 	m_state[id].m_state = SSHConnectionState::STATE_KEX_INIT_SENT;
-
-	//Done, pop the packet
-	PopPacket(m_state[id]);
 }
 
 /**
 	@brief Verifies an inbound SSH_MSG_KEXINIT packet contains our supported cipher suite
  */
-bool SSHTransportServer::ValidateKexInit(int id, SSHKexInitPacket* kex)
+bool SSHTransportServer::ValidateKexInit(SSHKexInitPacket* kex)
 {
 	//First name list: kex algorithms
 	auto offset = kex->GetFirstNameListStart();
@@ -369,13 +376,89 @@ bool SSHTransportServer::ValidateKexInit(int id, SSHKexInitPacket* kex)
 }
 
 /**
+	@brief Handles an incoming SSH_MSG_KEX_ECDH_INIT packet
+ */
+void SSHTransportServer::OnRxKexEcdhInit(int id, TCPTableEntry* socket)
+{
+	//Read the packet and make sure it's the right type. If not, drop the connection
+	auto pack = PeekPacket(m_state[id]);
+	pack->ByteSwap();
+	if(pack->m_type != SSHTransportPacket::SSH_MSG_KEX_ECDH_INIT)
+	{
+		m_state[id].Clear();
+		m_tcp.CloseSocket(socket);
+		return;
+	}
+
+	//Validate public key size
+	auto kexEcdh = reinterpret_cast<SSHKexEcdhInitPacket*>(pack->Payload());
+	kexEcdh->ByteSwap();
+	if(kexEcdh->m_length != 32)
+	{
+		m_state[id].Clear();
+		m_tcp.CloseSocket(socket);
+		return;
+	}
+
+	//TODO: save client's ephemeral public key so we can use it
+
+	//Prepare to reply with a key exchange reply packet
+	auto segment = m_tcp.GetTxSegment(socket);
+	auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+	packet->m_type = SSHTransportPacket::SSH_MSG_KEX_ECDH_REPLY;
+	auto replyStart = packet->Payload();
+	auto kexOut = reinterpret_cast<SSHKexEcdhReplyPacket*>(replyStart);
+
+	//Fill out constant length/type fields
+	kexOut->m_hostKeyLength = 51;
+	kexOut->m_hostKeyTypeLength = 11;
+	memcpy(kexOut->m_hostKeyType, g_sshHostKeyAlg, 11);
+	kexOut->m_hostKeyPublicLength = 32;
+	kexOut->m_ephemeralKeyPublicLength = 32;
+	kexOut->m_signatureBlobLength = 83;
+	kexOut->m_signatureTypeLength = 11;
+	memcpy(kexOut->m_signatureType, g_sshHostKeyAlg, 11);
+	kexOut->m_signatureLength = 64;
+
+	//Generate the ephemeral ECDH key
+	m_state[id].m_crypto->GenerateX25519KeyPair(kexOut->m_ephemeralKeyPublic);
+
+	//Calculate the shared secret between the client and server ephemeral keys
+
+	//Generate the exchange hash (SHA256)
+
+	/*
+	string   V_C, client's identification string (CR and LF excluded)
+	string   V_S, server's identification string (CR and LF excluded)
+	string   I_C, payload of the client's SSH_MSG_KEXINIT
+	string   I_S, payload of the server's SSH_MSG_KEXINIT
+	string   K_S, server's public host key
+	string   Q_C, client's ephemeral public key octet string
+	string   Q_S, server's ephemeral public key octet string
+	mpint    K,   shared secret
+	*/
+
+	//Sign exchange key
+	//for now, use all zero signature
+	memset(kexOut->m_signature, 0, 64);
+
+	//Add padding and calculate length
+	kexOut->ByteSwap();
+	packet->UpdateLength(sizeof(SSHKexEcdhReplyPacket), m_state[id].m_crypto);
+	auto len = packet->m_packetLength + sizeof(uint32_t);
+	packet->ByteSwap();
+
+	//Done, send it
+	m_tcp.SendTxSegment(socket, segment, len);
+
+	m_state[id].m_state = SSHConnectionState::STATE_KEX_ECDHINIT_SENT;
+}
+
+/**
 	@brief Checks if a packet is ready to read, or if it hasn't been fully received yet
  */
 bool SSHTransportServer::IsPacketReady(SSHConnectionState& state)
 {
-	//TODO: This gets extra fun in the case of encrypted packets... because the length is encrypted!
-	//How do we know if we decrypted the header or not during a multi segment packet?
-
 	auto& fifo = state.m_rxBuffer;
 	auto data = fifo.Rewind();
 	auto available = fifo.ReadSize();
@@ -405,5 +488,5 @@ void SSHTransportServer::PopPacket(SSHConnectionState& state)
 {
 	//By this point the header is decrypted and in host byte order, so it's easy
 	auto& fifo = state.m_rxBuffer;
-	fifo.Pop(*reinterpret_cast<uint32_t*>(fifo.Rewind()));
+	fifo.Pop(*reinterpret_cast<uint32_t*>(fifo.Rewind()) + 4);	//add 4 for length field itself
 }
