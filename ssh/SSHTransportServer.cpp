@@ -44,6 +44,9 @@ static const char* g_sshEncryptionAlg	= "aes128-gcm@openssh.com";
 static const char* g_sshMacAlg			= "none";	//implicit in GCM
 static const char* g_sshCompressionAlg	= "none";
 
+#define ECDH_KEY_SIZE		32
+#define SHA256_DIGEST_SIZE	32
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
 
@@ -211,8 +214,6 @@ void SSHTransportServer::OnRxBanner(int id, TCPTableEntry* socket)
 		return;
 	}
 
-	//Ignore client software version, we don't implement any quirks
-
 	//Send our banner to the client
 	static const char server_banner[] = "SSH-2.0-staticnet_0.1\r\n";
 	auto segment = m_tcp.GetTxSegment(socket);
@@ -220,6 +221,21 @@ void SSHTransportServer::OnRxBanner(int id, TCPTableEntry* socket)
 	strncpy((char*)payload, server_banner, TCP_IPV4_PAYLOAD_MTU);
 	m_tcp.SendTxSegment(socket, segment, sizeof(server_banner)-1);
 	m_state[id].m_state = SSHConnectionState::STATE_BANNER_SENT;
+
+	//Ignore client software version, we don't implement any quirks
+	//But we still need to hash it for the signature (note that the \r\n is NOT included in the hash)
+	//We also need to include a big-endian length before each ID string, even though this is not actually sent
+	//over the wire.
+	uint32_t clientBannerLen = bannerLen-2;
+	uint32_t clientBannerLen_be = __builtin_bswap32(clientBannerLen);
+	m_state[id].m_crypto->SHA256_Update((uint8_t*)&clientBannerLen_be, sizeof(clientBannerLen_be));
+	m_state[id].m_crypto->SHA256_Update(banner, clientBannerLen);
+
+	//Do the same thing for the server banner
+	uint32_t serverBannerLen = sizeof(server_banner)-3;
+	uint32_t serverBannerLen_be = __builtin_bswap32(serverBannerLen);
+	m_state[id].m_crypto->SHA256_Update((uint8_t*)&serverBannerLen_be, sizeof(serverBannerLen_be));
+	m_state[id].m_crypto->SHA256_Update((uint8_t*)server_banner, serverBannerLen);
 
 	//Pop the banner data off the FIFO
 	fifo.Pop(bannerLen);
@@ -232,13 +248,20 @@ void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 {
 	//Read the packet and make sure it's the right type. If not, drop the connection
 	auto pack = PeekPacket(m_state[id]);
-	pack->ByteSwap();
 	if(pack->m_type != SSHTransportPacket::SSH_MSG_KEXINIT)
 	{
 		m_state[id].Clear();
 		m_tcp.CloseSocket(socket);
 		return;
 	}
+	pack->ByteSwap();
+
+	//Hash the client key exchange packet.
+	//Note that padding and the type field are not included in the hash.
+	uint32_t lenUnpadded = pack->m_packetLength - (pack->m_paddingLength + 1);
+	uint32_t lenUnpadded_be = __builtin_bswap32(lenUnpadded);
+	m_state[id].m_crypto->SHA256_Update((uint8_t*)&lenUnpadded_be, sizeof(lenUnpadded_be));
+	m_state[id].m_crypto->SHA256_Update(&pack->m_type, lenUnpadded);
 
 	//Validate the inbound kex init packet
 	auto kexInit = reinterpret_cast<SSHKexInitPacket*>(pack->Payload());
@@ -307,9 +330,16 @@ void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 	//Add padding and calculate length
 	packet->UpdateLength(offset - replyStart, m_state[id].m_crypto);
 	auto len = packet->m_packetLength + sizeof(uint32_t);
-	packet->ByteSwap();
+
+	//Hash the server key exchange packet.
+	//Note that padding and the type field are not included in the hash.
+	lenUnpadded = packet->m_packetLength - (packet->m_paddingLength + 1);
+	lenUnpadded_be = __builtin_bswap32(lenUnpadded);
+	m_state[id].m_crypto->SHA256_Update((uint8_t*)&lenUnpadded_be, sizeof(lenUnpadded_be));
+	m_state[id].m_crypto->SHA256_Update(&packet->m_type, lenUnpadded);
 
 	//Done, send it
+	packet->ByteSwap();
 	m_tcp.SendTxSegment(socket, segment, len);
 	m_state[id].m_state = SSHConnectionState::STATE_KEX_INIT_SENT;
 }
@@ -393,14 +423,12 @@ void SSHTransportServer::OnRxKexEcdhInit(int id, TCPTableEntry* socket)
 	//Validate public key size
 	auto kexEcdh = reinterpret_cast<SSHKexEcdhInitPacket*>(pack->Payload());
 	kexEcdh->ByteSwap();
-	if(kexEcdh->m_length != 32)
+	if(kexEcdh->m_length != ECDH_KEY_SIZE)
 	{
 		m_state[id].Clear();
 		m_tcp.CloseSocket(socket);
 		return;
 	}
-
-	//TODO: save client's ephemeral public key so we can use it
 
 	//Prepare to reply with a key exchange reply packet
 	auto segment = m_tcp.GetTxSegment(socket);
@@ -413,51 +441,79 @@ void SSHTransportServer::OnRxKexEcdhInit(int id, TCPTableEntry* socket)
 	kexOut->m_hostKeyLength = 51;
 	kexOut->m_hostKeyTypeLength = 11;
 	memcpy(kexOut->m_hostKeyType, g_sshHostKeyAlg, 11);
-	kexOut->m_hostKeyPublicLength = 32;
-	kexOut->m_ephemeralKeyPublicLength = 32;
+	kexOut->m_hostKeyPublicLength = ECDH_KEY_SIZE;
+	kexOut->m_ephemeralKeyPublicLength = ECDH_KEY_SIZE;
 	kexOut->m_signatureBlobLength = 83;
 	kexOut->m_signatureTypeLength = 11;
 	memcpy(kexOut->m_signatureType, g_sshHostKeyAlg, 11);
 	kexOut->m_signatureLength = 64;
 
 	//Copy public host key
-	memcpy(kexOut->m_hostKeyPublic, m_state[id].m_crypto ->GetHostPublicKey(), 32);
+	memcpy(kexOut->m_hostKeyPublic, m_state[id].m_crypto ->GetHostPublicKey(), ECDH_KEY_SIZE);
 
 	//Generate the ephemeral ECDH key
 	m_state[id].m_crypto->GenerateX25519KeyPair(kexOut->m_ephemeralKeyPublic);
 
 	//Calculate the shared secret between the client and server ephemeral keys
-	uint8_t sharedSecret[32];
+	uint8_t sharedSecret[ECDH_KEY_SIZE];
 	m_state[id].m_crypto->SharedSecret(sharedSecret, kexEcdh->m_publicKey);
 
 	//Print out the shared secret
 	printf("Shared secret:\n");
-	for(int i=0; i<32; i++)
+	for(int i=0; i<ECDH_KEY_SIZE; i++)
 	{
 		printf("%02x ", sharedSecret[i]);
 		if( (i & 15) == 15)
 			printf("\n");
 	}
 
-	//Generate the exchange hash (SHA256)
+	//Get the key exchange into network byte order so we can hash all of the header fields correctly
+	kexOut->ByteSwap();
 
-	/*
-	string   V_C, client's identification string (CR and LF excluded)
-	string   V_S, server's identification string (CR and LF excluded)
-	string   I_C, payload of the client's SSH_MSG_KEXINIT
-	string   I_S, payload of the server's SSH_MSG_KEXINIT
-	string   K_S, server's public host key
-	string   Q_C, client's ephemeral public key octet string
-	string   Q_S, server's ephemeral public key octet string
-	mpint    K,   shared secret
-	*/
+	//Hash the rest of the stuff we need for the exchange hash
+	//Server public key
+	m_state[id].m_crypto->SHA256_Update((uint8_t*)&kexOut->m_hostKeyLength, 55);	//host key length + size of length itself
 
-	//Sign exchange key
+	//Client ephemeral public key
+	uint8_t pubkeyLen_be[4] = {0, 0, 0, ECDH_KEY_SIZE};
+	m_state[id].m_crypto->SHA256_Update(pubkeyLen_be, sizeof(pubkeyLen_be));
+	m_state[id].m_crypto->SHA256_Update(kexEcdh->m_publicKey, ECDH_KEY_SIZE);
+
+	//Server ephemeral public key
+	m_state[id].m_crypto->SHA256_Update(pubkeyLen_be, sizeof(pubkeyLen_be));
+	m_state[id].m_crypto->SHA256_Update(kexOut->m_ephemeralKeyPublic, ECDH_KEY_SIZE);
+
+	//Finally, the last thing left to hash is the shared secret.
+	//But we need to do some munging on it to a weird bignum format first.
+	//Basically, if the MSB of the shared secret is set, add an extra 0x00 byte before it.
+	uint8_t bignum_len[5] = {0, 0, 0, 32, 0};
+	if(sharedSecret[0] & 0x80)
+	{
+		bignum_len[3] ++;
+		m_state[id].m_crypto->SHA256_Update(bignum_len, 5);
+	}
+	else
+		m_state[id].m_crypto->SHA256_Update(bignum_len, 4);
+	m_state[id].m_crypto->SHA256_Update(sharedSecret, ECDH_KEY_SIZE);
+
+	//Calculate the exchange hash
+	uint8_t digest[SHA256_DIGEST_SIZE];
+	m_state[id].m_crypto->SHA256_Final(digest);
+
+	//Print out the exchange hash
+	printf("Exchange hash:\n");
+	for(int i=0; i<SHA256_DIGEST_SIZE; i++)
+	{
+		printf("%02x ", digest[i]);
+		if( (i & 15) == 15)
+			printf("\n");
+	}
+
+	//Sign exchange hash
 	//for now, use all zero signature
 	memset(kexOut->m_signature, 0, 64);
 
 	//Add padding and calculate length
-	kexOut->ByteSwap();
 	packet->UpdateLength(sizeof(SSHKexEcdhReplyPacket), m_state[id].m_crypto);
 	auto len = packet->m_packetLength + sizeof(uint32_t);
 	packet->ByteSwap();

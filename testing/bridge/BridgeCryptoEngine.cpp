@@ -93,6 +93,16 @@ void BridgeCryptoEngine::SHA256_Init()
 
 void BridgeCryptoEngine::SHA256_Update(uint8_t* data, uint16_t len)
 {
+	printf("SHA256: %u bytes\n", len);
+
+	for(int i=0; i<len; i++)
+	{
+		printf("%02x ", data[i]);
+		if( (i & 15) == 15)
+			printf("\n");
+	}
+	printf("\n");
+
 	m_hash.Update(data, len);
 }
 

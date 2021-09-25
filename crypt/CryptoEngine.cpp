@@ -53,4 +53,5 @@ CryptoEngine::~CryptoEngine()
 void CryptoEngine::Clear()
 {
 	memset(m_ephemeralkeyPriv, 0, sizeof(m_ephemeralkeyPriv));
+	SHA256_Init();
 }
