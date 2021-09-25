@@ -44,9 +44,6 @@ static const char* g_sshEncryptionAlg	= "aes128-gcm@openssh.com";
 static const char* g_sshMacAlg			= "none";	//implicit in GCM
 static const char* g_sshCompressionAlg	= "none";
 
-#define ECDH_KEY_SIZE		32
-#define SHA256_DIGEST_SIZE	32
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
 
@@ -458,15 +455,6 @@ void SSHTransportServer::OnRxKexEcdhInit(int id, TCPTableEntry* socket)
 	uint8_t sharedSecret[ECDH_KEY_SIZE];
 	m_state[id].m_crypto->SharedSecret(sharedSecret, kexEcdh->m_publicKey);
 
-	//Print out the shared secret
-	printf("Shared secret:\n");
-	for(int i=0; i<ECDH_KEY_SIZE; i++)
-	{
-		printf("%02x ", sharedSecret[i]);
-		if( (i & 15) == 15)
-			printf("\n");
-	}
-
 	//Get the key exchange into network byte order so we can hash all of the header fields correctly
 	kexOut->ByteSwap();
 
@@ -500,18 +488,9 @@ void SSHTransportServer::OnRxKexEcdhInit(int id, TCPTableEntry* socket)
 	uint8_t digest[SHA256_DIGEST_SIZE];
 	m_state[id].m_crypto->SHA256_Final(digest);
 
-	//Print out the exchange hash
-	printf("Exchange hash:\n");
-	for(int i=0; i<SHA256_DIGEST_SIZE; i++)
-	{
-		printf("%02x ", digest[i]);
-		if( (i & 15) == 15)
-			printf("\n");
-	}
-
 	//Sign exchange hash
 	//for now, use all zero signature
-	memset(kexOut->m_signature, 0, 64);
+	m_state[id].m_crypto->SignExchangeHash(kexOut->m_signature, digest);
 
 	//Add padding and calculate length
 	packet->UpdateLength(sizeof(SSHKexEcdhReplyPacket), m_state[id].m_crypto);

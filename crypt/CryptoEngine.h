@@ -36,6 +36,9 @@
 
 #include <contrib/tweetnacl_25519.h>
 
+#define ECDH_KEY_SIZE		32
+#define SHA256_DIGEST_SIZE	32
+
 /**
 	@brief Interface to an external crypto library or accelerator
 
@@ -75,12 +78,18 @@ public:
 	const uint8_t* GetHostPublicKey()
 	{ return m_hostkeyPub; }
 
-	///@brief Signs an ephemeral public key with our host key
-	void SignKey(uint8_t* sigOut, uint8_t* ephemeralKey)
+	///@brief Signs an exchange hash with our host key
+	void SignExchangeHash(uint8_t* sigOut, uint8_t* exchangeHash)
 	{
-		uint8_t sm[96];
-		uint64_t smlen = sizeof(sm);
-		crypto_sign(sm, &smlen, ephemeralKey, 32, m_hostkeyPriv);
+		//tweetnacl wants the public key here which is kinda derpy, we don't actually need it
+		//TODO: optimize out this stupidiy
+		uint8_t keyCombined[64];
+		memcpy(keyCombined, m_hostkeyPriv, 32);
+		memcpy(keyCombined + 32, m_hostkeyPub, 32);
+
+		uint8_t sm[128];
+		uint64_t smlen;
+		crypto_sign(sm, &smlen, exchangeHash, SHA256_DIGEST_SIZE, keyCombined);
 		memcpy(sigOut, sm, 64);
 	}
 
