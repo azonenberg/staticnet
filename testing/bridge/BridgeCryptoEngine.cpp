@@ -83,3 +83,20 @@ void BridgeCryptoEngine::GenerateRandom(uint8_t* buf, size_t len)
 	fread(buf, 1, len, m_fpRandom);
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// SHA256
+
+void BridgeCryptoEngine::SHA256_Init()
+{
+	m_hash.Restart();
+}
+
+void BridgeCryptoEngine::SHA256_Update(uint8_t* data, uint16_t len)
+{
+	m_hash.Update(data, len);
+}
+
+void BridgeCryptoEngine::SHA256_Final(uint8_t* digest)
+{
+	m_hash.Final(digest);
+}

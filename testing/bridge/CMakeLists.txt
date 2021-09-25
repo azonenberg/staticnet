@@ -36,6 +36,6 @@ add_executable(bridge
 ###############################################################################
 #Linker settings
 target_link_libraries(bridge
-	m
+	cryptopp
 	)
 

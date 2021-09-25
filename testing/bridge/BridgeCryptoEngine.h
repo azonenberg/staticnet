@@ -34,6 +34,8 @@
 #ifndef BridgeCryptoEngine_h
 #define BridgeCryptoEngine_h
 
+#include <cryptopp/sha.h>
+
 /**
 	@brief Crypto engine class for the bridge test
  */
@@ -46,8 +48,14 @@ public:
 	virtual void GenerateRandom(uint8_t* buf, size_t len);
 	virtual void Clear();
 
+	virtual void SHA256_Init();
+	virtual void SHA256_Update(uint8_t* data, uint16_t len);
+	virtual void SHA256_Final(uint8_t* digest);
+
 protected:
 	FILE* m_fpRandom;
+
+	CryptoPP::SHA256 m_hash;
 };
 
 #endif

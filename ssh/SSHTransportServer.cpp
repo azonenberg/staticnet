@@ -420,10 +420,24 @@ void SSHTransportServer::OnRxKexEcdhInit(int id, TCPTableEntry* socket)
 	memcpy(kexOut->m_signatureType, g_sshHostKeyAlg, 11);
 	kexOut->m_signatureLength = 64;
 
+	//Copy public host key
+	memcpy(kexOut->m_hostKeyPublic, m_state[id].m_crypto ->GetHostPublicKey(), 32);
+
 	//Generate the ephemeral ECDH key
 	m_state[id].m_crypto->GenerateX25519KeyPair(kexOut->m_ephemeralKeyPublic);
 
 	//Calculate the shared secret between the client and server ephemeral keys
+	uint8_t sharedSecret[32];
+	m_state[id].m_crypto->SharedSecret(sharedSecret, kexEcdh->m_publicKey);
+
+	//Print out the shared secret
+	printf("Shared secret:\n");
+	for(int i=0; i<32; i++)
+	{
+		printf("%02x ", sharedSecret[i]);
+		if( (i & 15) == 15)
+			printf("\n");
+	}
 
 	//Generate the exchange hash (SHA256)
 

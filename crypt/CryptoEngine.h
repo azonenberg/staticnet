@@ -48,9 +48,7 @@ public:
 	CryptoEngine();
 	virtual ~CryptoEngine();
 
-	/**
-		@brief Generate cryptographic randomness
-	 */
+	///@brief Generate cryptographic randomness
 	virtual void GenerateRandom(uint8_t* buf, size_t len) =0;
 
 	virtual void Clear();
@@ -85,6 +83,19 @@ public:
 		crypto_sign(sm, &smlen, ephemeralKey, 32, m_hostkeyPriv);
 		memcpy(sigOut, sm, 64);
 	}
+
+	///@brief Calculates the shared secret between our ephemeral private key and the client's public key
+	void SharedSecret(uint8_t* sharedSecret, uint8_t* clientPublicKey)
+	{ crypto_scalarmult(sharedSecret, m_ephemeralkeyPriv, clientPublicKey); }
+
+	///@brief Initialize the SHA-256 context
+	virtual void SHA256_Init() =0;
+
+	///@brief Hashes data
+	virtual void SHA256_Update(uint8_t* data, uint16_t len) =0;
+
+	///@brief Finishes a hash operation
+	virtual void SHA256_Final(uint8_t* digest) =0;
 
 protected:
 

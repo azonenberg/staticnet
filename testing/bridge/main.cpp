@@ -66,6 +66,9 @@ int main(int /*argc*/, char* /*argv*/[])
 		auto frame = iface.GetRxFrame();
 		if(frame)
 			eth.OnRxFrame(frame);
+
+		else
+			usleep(1000);
 	}
 
 	return 0;
