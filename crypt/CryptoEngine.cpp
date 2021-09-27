@@ -53,5 +53,52 @@ CryptoEngine::~CryptoEngine()
 void CryptoEngine::Clear()
 {
 	memset(m_ephemeralkeyPriv, 0, sizeof(m_ephemeralkeyPriv));
+	memset(m_ivClientToServer, 0, sizeof(m_ivClientToServer));
+	memset(m_ivServerToClient, 0, sizeof(m_ivServerToClient));
+	memset(m_keyClientToServer, 0, sizeof(m_keyClientToServer));
+	memset(m_keyServerToClient, 0, sizeof(m_keyServerToClient));
 	SHA256_Init();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Session key calculation
+
+/**
+	@brief Derives all of our session key material
+ */
+void CryptoEngine::DeriveSessionKeys(uint8_t* sharedSecret, uint8_t* exchangeHash, uint8_t* sessionID)
+{
+	uint8_t buf[32];
+	DeriveSessionKey(sharedSecret, exchangeHash, sessionID, 'A', buf);
+	memcpy(m_ivClientToServer, buf, AES_BLOCK_SIZE);
+	DeriveSessionKey(sharedSecret, exchangeHash, sessionID, 'B', buf);
+	memcpy(m_ivServerToClient, buf, AES_BLOCK_SIZE);
+	DeriveSessionKey(sharedSecret, exchangeHash, sessionID, 'C', buf);
+	memcpy(m_keyClientToServer, buf, AES_KEY_SIZE);
+	DeriveSessionKey(sharedSecret, exchangeHash, sessionID, 'D', buf);
+	memcpy(m_keyServerToClient, buf, AES_KEY_SIZE);
+}
+
+/**
+	@brief Derives a single session key
+ */
+void CryptoEngine::DeriveSessionKey(uint8_t* sharedSecret, uint8_t* exchangeHash, uint8_t* sessionID, char keyid, uint8_t* out)
+{
+	SHA256_Init();
+
+	//Convert the shared secret to OpenSSH mpint format and hash that
+	uint8_t bignum_len[5] = {0, 0, 0, 32, 0};
+	if(sharedSecret[0] & 0x80)
+	{
+		bignum_len[3] ++;
+		SHA256_Update(bignum_len, 5);
+	}
+	else
+		SHA256_Update(bignum_len, 4);
+	SHA256_Update(sharedSecret, ECDH_KEY_SIZE);
+
+	SHA256_Update(exchangeHash, SHA256_DIGEST_SIZE);
+	SHA256_Update((uint8_t*)&keyid, 1);
+	SHA256_Update(sessionID, SHA256_DIGEST_SIZE);
+	SHA256_Final(out);
 }

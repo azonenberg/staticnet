@@ -149,8 +149,14 @@ bool SSHTransportServer::OnRxData(TCPTableEntry* socket, uint8_t* payload, uint1
 				OnRxKexEcdhInit(id, socket);
 				break;
 
+			case SSHConnectionState::STATE_KEX_ECDHINIT_SENT:
+				OnRxNewKeys(id, socket);
+				break;
+
+			//By the time we get here, we've got encrypted traffic!
+			//Need to decrypt and verify it before doing anything.
 			default:
-				printf("unknown state\n");
+				OnRxEncryptedPacket(id, socket);
 				break;
 		}
 
@@ -269,8 +275,6 @@ void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 		return;
 	}
 
-	//TODO: save the nonce from the kex init packet
-
 	//Prepare to reply with a key exchange init packet
 	auto segment = m_tcp.GetTxSegment(socket);
 	auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
@@ -280,7 +284,6 @@ void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 	auto replyStart = packet->Payload();
 	auto kexOut = reinterpret_cast<SSHKexInitPacket*>(replyStart);
 	m_state[id].m_crypto->GenerateRandom(kexOut->m_cookie, sizeof(kexOut->m_cookie));
-	//TODO: save the nonce so we can use it for the actual key exchange
 
 	//Kex algorithms
 	auto offset = kexOut->GetFirstNameListStart();
@@ -489,8 +492,11 @@ void SSHTransportServer::OnRxKexEcdhInit(int id, TCPTableEntry* socket)
 	m_state[id].m_crypto->SHA256_Final(digest);
 
 	//Sign exchange hash
-	//for now, use all zero signature
 	m_state[id].m_crypto->SignExchangeHash(kexOut->m_signature, digest);
+
+	//Calculate session keys
+	//For now we don't support re-keying. In the fist key exchange the exchange hash is also the session ID.
+	m_state[id].m_crypto->DeriveSessionKeys(sharedSecret, digest, digest);
 
 	//Add padding and calculate length
 	packet->UpdateLength(sizeof(SSHKexEcdhReplyPacket), m_state[id].m_crypto);
@@ -501,6 +507,51 @@ void SSHTransportServer::OnRxKexEcdhInit(int id, TCPTableEntry* socket)
 	m_tcp.SendTxSegment(socket, segment, len);
 
 	m_state[id].m_state = SSHConnectionState::STATE_KEX_ECDHINIT_SENT;
+}
+
+/**
+	@brief Handles a SSH_MSG_NEWKEYS message
+ */
+void SSHTransportServer::OnRxNewKeys(int id, TCPTableEntry* socket)
+{
+	//Read the packet and make sure it's the right type. If not, drop the connection
+	auto pack = PeekPacket(m_state[id]);
+	pack->ByteSwap();
+	if(pack->m_type != SSHTransportPacket::SSH_MSG_NEWKEYS)
+	{
+		m_state[id].Clear();
+		m_tcp.CloseSocket(socket);
+		return;
+	}
+
+	//Send a canned reply
+	auto segment = m_tcp.GetTxSegment(socket);
+	auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+	packet->m_type = SSHTransportPacket::SSH_MSG_NEWKEYS;
+
+	//Add padding and calculate length
+	packet->UpdateLength(0, m_state[id].m_crypto);
+	auto len = packet->m_packetLength + sizeof(uint32_t);
+	packet->ByteSwap();
+
+	//Done, send it
+	m_tcp.SendTxSegment(socket, segment, len);
+
+	m_state[id].m_state = SSHConnectionState::STATE_NEWKEYS_SENT;
+}
+
+/**
+	@brief Handles an encrypted packet of unknown type (not decrypted or verified yet)
+ */
+void SSHTransportServer::OnRxEncryptedPacket(int id, TCPTableEntry* socket)
+{
+	printf("Got an encrypted packet\n");
+
+	//Grab the packet
+	auto pack = PeekPacket(m_state[id]);
+	pack->ByteSwap();
+
+	//Need to decrypt the entire packet including type field
 }
 
 /**

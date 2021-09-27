@@ -38,6 +38,8 @@
 
 #define ECDH_KEY_SIZE		32
 #define SHA256_DIGEST_SIZE	32
+#define AES_BLOCK_SIZE		16
+#define AES_KEY_SIZE		16
 
 /**
 	@brief Interface to an external crypto library or accelerator
@@ -106,17 +108,31 @@ public:
 	///@brief Finishes a hash operation
 	virtual void SHA256_Final(uint8_t* digest) =0;
 
+	void DeriveSessionKeys(uint8_t* sharedSecret, uint8_t* exchangeHash, uint8_t* sessionID);
+	void DeriveSessionKey(uint8_t* sharedSecret, uint8_t* exchangeHash, uint8_t* sessionID, char keyid, uint8_t* out);
+
 protected:
 
 	///@brief Ed25519 SSH host key (public)
-	static uint8_t m_hostkeyPub[32];
+	static uint8_t m_hostkeyPub[ECDH_KEY_SIZE];
 
 	///@brief Ed25519 SSH host key (private)
-	static uint8_t m_hostkeyPriv[32];
+	static uint8_t m_hostkeyPriv[ECDH_KEY_SIZE];
 
 	///@brief Ephemeral x25519 private key
-	uint8_t m_ephemeralkeyPriv[32];
+	uint8_t m_ephemeralkeyPriv[ECDH_KEY_SIZE];
 
+	///@brief IV client to server
+	uint8_t m_ivClientToServer[AES_BLOCK_SIZE];
+
+	///@brief IV server to client
+	uint8_t m_ivServerToClient[AES_BLOCK_SIZE];
+
+	///@brief Encryption key client to server
+	uint8_t m_keyClientToServer[AES_KEY_SIZE];
+
+	///@brief Encryption key server to client
+	uint8_t m_keyServerToClient[AES_KEY_SIZE];
 };
 
 #endif

@@ -78,6 +78,11 @@ public:
 		STATE_BANNER_SENT,			//Connection opened, we sent our banner to the client
 		STATE_KEX_INIT_SENT,		//Got the banner, we sent our kex init message to the client
 		STATE_KEX_ECDHINIT_SENT,	//Got the client's ECDH ephemeral key and sent ours
+		STATE_NEWKEYS_SENT,			//Keys created, session is active, but not authenticated yet
+
+		//TODO
+		STATE_INVALID
+
 	} m_state;
 
 	CryptoEngine* m_crypto;
@@ -109,6 +114,8 @@ protected:
 	void OnRxKexInit(int id, TCPTableEntry* socket);
 	bool ValidateKexInit(SSHKexInitPacket* kex);
 	void OnRxKexEcdhInit(int id, TCPTableEntry* socket);
+	void OnRxNewKeys(int id, TCPTableEntry* socket);
+	void OnRxEncryptedPacket(int id, TCPTableEntry* socket);
 
 	bool IsPacketReady(SSHConnectionState& state);
 	SSHTransportPacket* PeekPacket(SSHConnectionState& state);
