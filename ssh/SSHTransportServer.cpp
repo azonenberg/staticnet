@@ -507,6 +507,9 @@ void SSHTransportServer::OnRxKexEcdhInit(int id, TCPTableEntry* socket)
 	m_tcp.SendTxSegment(socket, segment, len);
 
 	m_state[id].m_state = SSHConnectionState::STATE_KEX_ECDHINIT_SENT;
+
+	//We now expect a MAC on all future packets
+	m_state[id].m_macPresent = true;
 }
 
 /**
@@ -545,13 +548,47 @@ void SSHTransportServer::OnRxNewKeys(int id, TCPTableEntry* socket)
  */
 void SSHTransportServer::OnRxEncryptedPacket(int id, TCPTableEntry* socket)
 {
-	printf("Got an encrypted packet\n");
-
 	//Grab the packet
 	auto pack = PeekPacket(m_state[id]);
 	pack->ByteSwap();
 
-	//Need to decrypt the entire packet including type field
+	//Need to decrypt the entire packet including type field and padding length before doing anything else
+	//If verification failure, drop the connection and exit
+	if(!m_state[id].m_crypto->DecryptAndVerify(&pack->m_paddingLength, pack->m_packetLength + GCM_TAG_SIZE))
+	{
+		m_state[id].Clear();
+		m_tcp.CloseSocket(socket);
+		return;
+	}
+
+	switch(pack->m_type)
+	{
+		case SSHTransportPacket::SSH_MSG_IGNORE:
+			OnRxIgnore(id, socket, pack);
+			break;
+
+		case SSHTransportPacket::SSH_MSG_SERVICE_REQUEST:
+			OnRxServiceRequest(id, socket, pack);
+			break;
+
+		default:
+			printf("Got unexpected packet (type %d)\n", pack->m_type);
+	}
+}
+
+void SSHTransportServer::OnRxIgnore(int /*id*/, TCPTableEntry* /*socket*/, SSHTransportPacket* packet)
+{
+	int payloadSize = packet->m_packetLength - packet->m_paddingLength;
+	printf("Got SSH_MSG_IGNORE (%d bytes)\n    ", payloadSize);
+	for(int i=0; i<payloadSize; i++)
+		printf("%02x ", packet->Payload()[i]);
+	printf("\n");
+}
+
+void SSHTransportServer::OnRxServiceRequest(int id, TCPTableEntry* socket, SSHTransportPacket* packet)
+{
+	int payloadSize = packet->m_packetLength - packet->m_paddingLength;
+	printf("Got SSH_MSG_SERVICE_REQUEST (%d bytes)\n    ", payloadSize);
 }
 
 /**
@@ -570,6 +607,8 @@ bool SSHTransportServer::IsPacketReady(SSHConnectionState& state)
 	if(available >= (4+reallen))	//extra 4 bytes for the length field itself
 		return true;
 
+	//TODO: don't wait forever if client sends a packet bigger than our buffer
+
 	return false;
 }
 
@@ -586,7 +625,13 @@ SSHTransportPacket* SSHTransportServer::PeekPacket(SSHConnectionState& state)
  */
 void SSHTransportServer::PopPacket(SSHConnectionState& state)
 {
-	//By this point the header is decrypted and in host byte order, so it's easy
 	auto& fifo = state.m_rxBuffer;
-	fifo.Pop(*reinterpret_cast<uint32_t*>(fifo.Rewind()) + 4);	//add 4 for length field itself
+
+	//By this point the header is decrypted and in host byte order, so it's easy.
+	//Just need to account for the 4-byte length field and (if present) the MAC.
+	uint16_t poplen = *reinterpret_cast<uint32_t*>(fifo.Rewind()) + 4;
+	if(state.m_macPresent)
+		poplen += GCM_TAG_SIZE;
+
+	fifo.Pop(poplen);
 }

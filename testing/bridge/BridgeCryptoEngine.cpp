@@ -100,3 +100,59 @@ void BridgeCryptoEngine::SHA256_Final(uint8_t* digest)
 {
 	m_hash.Final(digest);
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// AES
+
+
+bool BridgeCryptoEngine::DecryptAndVerify(uint8_t* data, uint16_t len)
+{
+	m_decryptor.SetKeyWithIV(m_keyClientToServer, AES_KEY_SIZE, m_ivClientToServer, GCM_IV_SIZE);
+
+	try
+	{
+		std::string cleartext;
+		CryptoPP::AuthenticatedDecryptionFilter df(
+			m_decryptor,
+			new CryptoPP::StringSink(cleartext),
+			CryptoPP::AuthenticatedDecryptionFilter::MAC_AT_END,
+			GCM_TAG_SIZE);
+
+		//Packet length is added as additional authenticated data, but not part of the normal AES payload
+		uint32_t len_be = __builtin_bswap32(len - GCM_TAG_SIZE);
+		df.ChannelPut( CryptoPP::AAD_CHANNEL, (uint8_t*)&len_be, sizeof(len_be) );
+
+		df.ChannelPut( CryptoPP::DEFAULT_CHANNEL, data, len);
+
+		df.ChannelMessageEnd(CryptoPP::AAD_CHANNEL);
+		df.ChannelMessageEnd(CryptoPP::DEFAULT_CHANNEL);
+
+		//Check the MAC
+		if(!df.GetLastResult())
+		{
+			printf("Verification failed\n");
+			return false;
+		}
+
+		//Crypto++ can't do in place transforms, so copy it ourselves
+		memcpy(data, cleartext.c_str(), cleartext.length());
+	}
+	catch(...)
+	{
+		return false;
+	}
+
+	//Increment IV
+	//high 4 bytes stay constant
+	//low 8 bytes are 64 bit big endian integer
+	m_ivClientToServer[GCM_IV_SIZE-1] ++;
+	for(int i=GCM_IV_SIZE-1; i>=4; i--)
+	{
+		if(m_ivClientToServer[i] == 0)
+			m_ivClientToServer[i-1] ++;
+		else
+			break;
+	}
+
+	return true;
+}

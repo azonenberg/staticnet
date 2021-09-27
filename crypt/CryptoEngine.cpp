@@ -70,9 +70,10 @@ void CryptoEngine::DeriveSessionKeys(uint8_t* sharedSecret, uint8_t* exchangeHas
 {
 	uint8_t buf[32];
 	DeriveSessionKey(sharedSecret, exchangeHash, sessionID, 'A', buf);
-	memcpy(m_ivClientToServer, buf, AES_BLOCK_SIZE);
+	memcpy(m_ivClientToServer, buf, GCM_IV_SIZE);
+
 	DeriveSessionKey(sharedSecret, exchangeHash, sessionID, 'B', buf);
-	memcpy(m_ivServerToClient, buf, AES_BLOCK_SIZE);
+	memcpy(m_ivServerToClient, buf, GCM_IV_SIZE);
 	DeriveSessionKey(sharedSecret, exchangeHash, sessionID, 'C', buf);
 	memcpy(m_keyClientToServer, buf, AES_KEY_SIZE);
 	DeriveSessionKey(sharedSecret, exchangeHash, sessionID, 'D', buf);

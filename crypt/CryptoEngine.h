@@ -40,6 +40,8 @@
 #define SHA256_DIGEST_SIZE	32
 #define AES_BLOCK_SIZE		16
 #define AES_KEY_SIZE		16
+#define GCM_IV_SIZE			12
+#define GCM_TAG_SIZE		16
 
 /**
 	@brief Interface to an external crypto library or accelerator
@@ -111,6 +113,13 @@ public:
 	void DeriveSessionKeys(uint8_t* sharedSecret, uint8_t* exchangeHash, uint8_t* sessionID);
 	void DeriveSessionKey(uint8_t* sharedSecret, uint8_t* exchangeHash, uint8_t* sessionID, char keyid, uint8_t* out);
 
+	/**
+		@brief Decrypts an encrypted packet in place, and returns true if the MAC is correct.
+
+		If this function returns false the packet should be considered corrupted and discarded immediately.
+	 */
+	virtual bool DecryptAndVerify(uint8_t* data, uint16_t len) =0;
+
 protected:
 
 	///@brief Ed25519 SSH host key (public)
@@ -123,10 +132,10 @@ protected:
 	uint8_t m_ephemeralkeyPriv[ECDH_KEY_SIZE];
 
 	///@brief IV client to server
-	uint8_t m_ivClientToServer[AES_BLOCK_SIZE];
+	uint8_t m_ivClientToServer[GCM_IV_SIZE];
 
 	///@brief IV server to client
-	uint8_t m_ivServerToClient[AES_BLOCK_SIZE];
+	uint8_t m_ivServerToClient[GCM_IV_SIZE];
 
 	///@brief Encryption key client to server
 	uint8_t m_keyClientToServer[AES_KEY_SIZE];

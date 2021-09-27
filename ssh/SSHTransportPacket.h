@@ -45,6 +45,9 @@ public:
 
 	enum sshmsg_t
 	{
+		SSH_MSG_IGNORE			= 0x02,
+		SSH_MSG_SERVICE_REQUEST	= 0x05,
+
 		SSH_MSG_KEXINIT			= 0x14,
 		SSH_MSG_NEWKEYS			= 0x15,
 
@@ -77,7 +80,7 @@ public:
 
 	//After packet:
 	//uint8_t padding[]
-	//uint8_t mac[] (not present in AEAD modes)
+	//uint8_t mac[32]
 };
 
 #endif

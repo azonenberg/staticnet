@@ -55,6 +55,7 @@ public:
 	 */
 	void Clear()
 	{
+		m_macPresent = false;
 		m_valid = false;
 		m_socket = NULL;
 		m_state = STATE_BANNER_SENT;
@@ -88,6 +89,9 @@ public:
 	CryptoEngine* m_crypto;
 
 	CircularFIFO<SSH_RX_BUFFER_SIZE> m_rxBuffer;
+
+	//If true, we've completed the key exchange and have a MAC at the end of each packet
+	bool m_macPresent;
 };
 
 /**
@@ -116,6 +120,8 @@ protected:
 	void OnRxKexEcdhInit(int id, TCPTableEntry* socket);
 	void OnRxNewKeys(int id, TCPTableEntry* socket);
 	void OnRxEncryptedPacket(int id, TCPTableEntry* socket);
+	void OnRxIgnore(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
+	void OnRxServiceRequest(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
 
 	bool IsPacketReady(SSHConnectionState& state);
 	SSHTransportPacket* PeekPacket(SSHConnectionState& state);

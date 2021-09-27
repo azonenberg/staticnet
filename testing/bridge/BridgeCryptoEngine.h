@@ -35,6 +35,9 @@
 #define BridgeCryptoEngine_h
 
 #include <cryptopp/sha.h>
+#include <cryptopp/aes.h>
+#include <cryptopp/gcm.h>
+#include <cryptopp/filters.h>
 
 /**
 	@brief Crypto engine class for the bridge test
@@ -52,10 +55,14 @@ public:
 	virtual void SHA256_Update(uint8_t* data, uint16_t len);
 	virtual void SHA256_Final(uint8_t* digest);
 
+	virtual bool DecryptAndVerify(uint8_t* data, uint16_t len);
+
 protected:
 	FILE* m_fpRandom;
 
 	CryptoPP::SHA256 m_hash;
+
+	CryptoPP::GCM<CryptoPP::AES>::Decryption m_decryptor;
 };
 
 #endif
