@@ -67,7 +67,7 @@ uint8_t* SSHKexInitPacket::GetNextNameListStart(uint8_t* start)
 /**
 	@brief Searches a name list for a requested substring
  */
-bool SSHKexInitPacket::NameListContains(uint8_t* start, const char* search)
+bool SSHKexInitPacket::NameListContains(uint8_t* start, const char* search, uint16_t end)
 {
 	auto len = GetNameListLength(start);
 	auto data = GetNameListData(start);
@@ -77,6 +77,10 @@ bool SSHKexInitPacket::NameListContains(uint8_t* start, const char* search)
 	uint32_t pos = 0;
 	while(pos < (len - targetlen))
 	{
+		//Bounds check
+		if( ((data+pos) - reinterpret_cast<char*>(this)) > end)
+			return false;
+
 		//Check this string for a match (must be exact match, not just prefix)
 		if( (memcmp(data+pos, search, targetlen) == 0) &&
 			( (pos+targetlen == len) || (data[pos+targetlen] == ',') ) )

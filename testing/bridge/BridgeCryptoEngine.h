@@ -56,6 +56,7 @@ public:
 	virtual void SHA256_Final(uint8_t* digest);
 
 	virtual bool DecryptAndVerify(uint8_t* data, uint16_t len);
+	virtual void EncryptAndMAC(uint8_t* data, uint16_t len);
 
 protected:
 	FILE* m_fpRandom;
@@ -63,6 +64,7 @@ protected:
 	CryptoPP::SHA256 m_hash;
 
 	CryptoPP::GCM<CryptoPP::AES>::Decryption m_decryptor;
+	CryptoPP::GCM<CryptoPP::AES>::Encryption m_encryptor;
 };
 
 #endif

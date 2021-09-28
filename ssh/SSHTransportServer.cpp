@@ -36,6 +36,7 @@
 #include "SSHKexInitPacket.h"
 #include "SSHKexEcdhInitPacket.h"
 #include "SSHKexEcdhReplyPacket.h"
+#include "SSHServiceRequestPacket.h"
 
 //Our single supported cipher suite
 static const char* g_sshKexAlg			= "curve25519-sha256";				//RFC 8731
@@ -43,6 +44,9 @@ static const char* g_sshHostKeyAlg		= "ssh-ed25519";
 static const char* g_sshEncryptionAlg	= "aes128-gcm@openssh.com";
 static const char* g_sshMacAlg			= "none";	//implicit in GCM
 static const char* g_sshCompressionAlg	= "none";
+
+//Other global strings for magic values
+static const char* g_strUserAuth		= "ssh-userauth";
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
@@ -262,13 +266,19 @@ void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 	//Hash the client key exchange packet.
 	//Note that padding and the type field are not included in the hash.
 	uint32_t lenUnpadded = pack->m_packetLength - (pack->m_paddingLength + 1);
+	if(lenUnpadded > pack->m_packetLength)
+	{
+		m_state[id].Clear();
+		m_tcp.CloseSocket(socket);
+		return;
+	}
 	uint32_t lenUnpadded_be = __builtin_bswap32(lenUnpadded);
 	m_state[id].m_crypto->SHA256_Update((uint8_t*)&lenUnpadded_be, sizeof(lenUnpadded_be));
 	m_state[id].m_crypto->SHA256_Update(&pack->m_type, lenUnpadded);
 
 	//Validate the inbound kex init packet
 	auto kexInit = reinterpret_cast<SSHKexInitPacket*>(pack->Payload());
-	if(!ValidateKexInit(kexInit))
+	if(!ValidateKexInit(kexInit, lenUnpadded))
 	{
 		m_state[id].Clear();
 		m_tcp.CloseSocket(socket);
@@ -347,26 +357,27 @@ void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 /**
 	@brief Verifies an inbound SSH_MSG_KEXINIT packet contains our supported cipher suite
  */
-bool SSHTransportServer::ValidateKexInit(SSHKexInitPacket* kex)
+bool SSHTransportServer::ValidateKexInit(SSHKexInitPacket* kex, uint16_t len)
 {
 	//First name list: kex algorithms
 	auto offset = kex->GetFirstNameListStart();
-	if(!kex->NameListContains(offset, g_sshKexAlg))
+	auto first = offset;
+	if(!kex->NameListContains(offset, g_sshKexAlg, len))
 		return false;
 
 	//Server host key algorithms
 	offset = kex->GetNextNameListStart(offset);
-	if(!kex->NameListContains(offset, g_sshHostKeyAlg))
+	if(!kex->NameListContains(offset, g_sshHostKeyAlg, len))
 		return false;
 
 	//Encryption algorithms (client to server)
 	offset = kex->GetNextNameListStart(offset);
-	if(!kex->NameListContains(offset, g_sshEncryptionAlg))
+	if(!kex->NameListContains(offset, g_sshEncryptionAlg, len))
 		return false;
 
 	//Encryption algorithms (server to client)
 	offset = kex->GetNextNameListStart(offset);
-	if(!kex->NameListContains(offset, g_sshEncryptionAlg))
+	if(!kex->NameListContains(offset, g_sshEncryptionAlg, len))
 		return false;
 
 	//MAC algorithms (client to server)
@@ -379,12 +390,12 @@ bool SSHTransportServer::ValidateKexInit(SSHKexInitPacket* kex)
 
 	//Compression algorithms (client to server)
 	offset = kex->GetNextNameListStart(offset);
-	if(!kex->NameListContains(offset, g_sshCompressionAlg))
+	if(!kex->NameListContains(offset, g_sshCompressionAlg, len))
 		return false;
 
 	//Compression algorithms (server to client)
 	offset = kex->GetNextNameListStart(offset);
-	if(!kex->NameListContains(offset, g_sshCompressionAlg))
+	if(!kex->NameListContains(offset, g_sshCompressionAlg, len))
 		return false;
 
 	//Languages (client to server)
@@ -397,6 +408,8 @@ bool SSHTransportServer::ValidateKexInit(SSHKexInitPacket* kex)
 
 	//first kex packet follows (not supported)
 	offset = kex->GetNextNameListStart(offset);
+	if( (offset-first) > len)
+		return false;
 	bool firstKexFollows = *offset;
 	if(firstKexFollows)
 		return false;
@@ -410,12 +423,14 @@ bool SSHTransportServer::ValidateKexInit(SSHKexInitPacket* kex)
  */
 void SSHTransportServer::OnRxKexEcdhInit(int id, TCPTableEntry* socket)
 {
+	auto& state = m_state[id];
+
 	//Read the packet and make sure it's the right type. If not, drop the connection
-	auto pack = PeekPacket(m_state[id]);
+	auto pack = PeekPacket(state);
 	pack->ByteSwap();
 	if(pack->m_type != SSHTransportPacket::SSH_MSG_KEX_ECDH_INIT)
 	{
-		m_state[id].Clear();
+		state.Clear();
 		m_tcp.CloseSocket(socket);
 		return;
 	}
@@ -425,7 +440,7 @@ void SSHTransportServer::OnRxKexEcdhInit(int id, TCPTableEntry* socket)
 	kexEcdh->ByteSwap();
 	if(kexEcdh->m_length != ECDH_KEY_SIZE)
 	{
-		m_state[id].Clear();
+		state.Clear();
 		m_tcp.CloseSocket(socket);
 		return;
 	}
@@ -449,30 +464,30 @@ void SSHTransportServer::OnRxKexEcdhInit(int id, TCPTableEntry* socket)
 	kexOut->m_signatureLength = 64;
 
 	//Copy public host key
-	memcpy(kexOut->m_hostKeyPublic, m_state[id].m_crypto ->GetHostPublicKey(), ECDH_KEY_SIZE);
+	memcpy(kexOut->m_hostKeyPublic, state.m_crypto ->GetHostPublicKey(), ECDH_KEY_SIZE);
 
 	//Generate the ephemeral ECDH key
-	m_state[id].m_crypto->GenerateX25519KeyPair(kexOut->m_ephemeralKeyPublic);
+	state.m_crypto->GenerateX25519KeyPair(kexOut->m_ephemeralKeyPublic);
 
 	//Calculate the shared secret between the client and server ephemeral keys
 	uint8_t sharedSecret[ECDH_KEY_SIZE];
-	m_state[id].m_crypto->SharedSecret(sharedSecret, kexEcdh->m_publicKey);
+	state.m_crypto->SharedSecret(sharedSecret, kexEcdh->m_publicKey);
 
 	//Get the key exchange into network byte order so we can hash all of the header fields correctly
 	kexOut->ByteSwap();
 
 	//Hash the rest of the stuff we need for the exchange hash
 	//Server public key
-	m_state[id].m_crypto->SHA256_Update((uint8_t*)&kexOut->m_hostKeyLength, 55);	//host key length + size of length itself
+	state.m_crypto->SHA256_Update((uint8_t*)&kexOut->m_hostKeyLength, 55);	//host key length + size of length itself
 
 	//Client ephemeral public key
 	uint8_t pubkeyLen_be[4] = {0, 0, 0, ECDH_KEY_SIZE};
-	m_state[id].m_crypto->SHA256_Update(pubkeyLen_be, sizeof(pubkeyLen_be));
-	m_state[id].m_crypto->SHA256_Update(kexEcdh->m_publicKey, ECDH_KEY_SIZE);
+	state.m_crypto->SHA256_Update(pubkeyLen_be, sizeof(pubkeyLen_be));
+	state.m_crypto->SHA256_Update(kexEcdh->m_publicKey, ECDH_KEY_SIZE);
 
 	//Server ephemeral public key
-	m_state[id].m_crypto->SHA256_Update(pubkeyLen_be, sizeof(pubkeyLen_be));
-	m_state[id].m_crypto->SHA256_Update(kexOut->m_ephemeralKeyPublic, ECDH_KEY_SIZE);
+	state.m_crypto->SHA256_Update(pubkeyLen_be, sizeof(pubkeyLen_be));
+	state.m_crypto->SHA256_Update(kexOut->m_ephemeralKeyPublic, ECDH_KEY_SIZE);
 
 	//Finally, the last thing left to hash is the shared secret.
 	//But we need to do some munging on it to a weird bignum format first.
@@ -481,35 +496,32 @@ void SSHTransportServer::OnRxKexEcdhInit(int id, TCPTableEntry* socket)
 	if(sharedSecret[0] & 0x80)
 	{
 		bignum_len[3] ++;
-		m_state[id].m_crypto->SHA256_Update(bignum_len, 5);
+		state.m_crypto->SHA256_Update(bignum_len, 5);
 	}
 	else
-		m_state[id].m_crypto->SHA256_Update(bignum_len, 4);
-	m_state[id].m_crypto->SHA256_Update(sharedSecret, ECDH_KEY_SIZE);
+		state.m_crypto->SHA256_Update(bignum_len, 4);
+	state.m_crypto->SHA256_Update(sharedSecret, ECDH_KEY_SIZE);
 
-	//Calculate the exchange hash
-	uint8_t digest[SHA256_DIGEST_SIZE];
-	m_state[id].m_crypto->SHA256_Final(digest);
-
-	//Sign exchange hash
-	m_state[id].m_crypto->SignExchangeHash(kexOut->m_signature, digest);
+	//Calculate and sign the exchange hash
+	state.m_crypto->SHA256_Final(state.m_sessionID);
+	state.m_crypto->SignExchangeHash(kexOut->m_signature, state.m_sessionID);
 
 	//Calculate session keys
 	//For now we don't support re-keying. In the fist key exchange the exchange hash is also the session ID.
-	m_state[id].m_crypto->DeriveSessionKeys(sharedSecret, digest, digest);
+	state.m_crypto->DeriveSessionKeys(sharedSecret, state.m_sessionID, state.m_sessionID);
 
 	//Add padding and calculate length
-	packet->UpdateLength(sizeof(SSHKexEcdhReplyPacket), m_state[id].m_crypto);
+	packet->UpdateLength(sizeof(SSHKexEcdhReplyPacket), state.m_crypto);
 	auto len = packet->m_packetLength + sizeof(uint32_t);
 	packet->ByteSwap();
 
 	//Done, send it
 	m_tcp.SendTxSegment(socket, segment, len);
 
-	m_state[id].m_state = SSHConnectionState::STATE_KEX_ECDHINIT_SENT;
+	state.m_state = SSHConnectionState::STATE_KEX_ECDHINIT_SENT;
 
 	//We now expect a MAC on all future packets
-	m_state[id].m_macPresent = true;
+	state.m_macPresent = true;
 }
 
 /**
@@ -540,7 +552,7 @@ void SSHTransportServer::OnRxNewKeys(int id, TCPTableEntry* socket)
 	//Done, send it
 	m_tcp.SendTxSegment(socket, segment, len);
 
-	m_state[id].m_state = SSHConnectionState::STATE_NEWKEYS_SENT;
+	m_state[id].m_state = SSHConnectionState::STATE_UNAUTHENTICATED;
 }
 
 /**
@@ -561,6 +573,14 @@ void SSHTransportServer::OnRxEncryptedPacket(int id, TCPTableEntry* socket)
 		return;
 	}
 
+	//Sanity check padding length
+	if(pack->m_paddingLength > pack->m_packetLength)
+	{
+		m_state[id].Clear();
+		m_tcp.CloseSocket(socket);
+		return;
+	}
+
 	switch(pack->m_type)
 	{
 		case SSHTransportPacket::SSH_MSG_IGNORE:
@@ -571,24 +591,117 @@ void SSHTransportServer::OnRxEncryptedPacket(int id, TCPTableEntry* socket)
 			OnRxServiceRequest(id, socket, pack);
 			break;
 
+		case SSHTransportPacket::SSH_MSG_USERAUTH_REQUEST:
+			OnRxUserAuthRequest(id, socket, pack);
+			break;
+
 		default:
 			printf("Got unexpected packet (type %d)\n", pack->m_type);
 	}
 }
 
-void SSHTransportServer::OnRxIgnore(int /*id*/, TCPTableEntry* /*socket*/, SSHTransportPacket* packet)
+/**
+	@brief Handle a SSH_MSG_IGNORE
+ */
+void SSHTransportServer::OnRxIgnore(int /*id*/, TCPTableEntry* /*socket*/, SSHTransportPacket* /*packet*/)
 {
-	int payloadSize = packet->m_packetLength - packet->m_paddingLength;
-	printf("Got SSH_MSG_IGNORE (%d bytes)\n    ", payloadSize);
-	for(int i=0; i<payloadSize; i++)
-		printf("%02x ", packet->Payload()[i]);
-	printf("\n");
+	//called at start of each connection with "markus" OpenSSH easter egg
 }
 
+/**
+	@brief Handle a SSH_MSG_SERVICE_REQUEST
+ */
 void SSHTransportServer::OnRxServiceRequest(int id, TCPTableEntry* socket, SSHTransportPacket* packet)
 {
-	int payloadSize = packet->m_packetLength - packet->m_paddingLength;
-	printf("Got SSH_MSG_SERVICE_REQUEST (%d bytes)\n    ", payloadSize);
+	auto service = reinterpret_cast<SSHServiceRequestPacket*>(packet->Payload());
+	service->ByteSwap();
+
+	//bounds check name length
+	if(service->m_length >= packet->m_packetLength)
+	{
+		m_state[id].Clear();
+		m_tcp.CloseSocket(socket);
+		return;
+	}
+
+	//Payload is expected to be a string. Null terminate it (this overwrites beginning of the MAC but who cares)
+	//so we can use C libraries to manipulate it.
+	auto payload = service->Payload();
+	payload[service->m_length] = '\0';
+
+	//Unauthenticated? Expect "ssh-userauth"
+	if(m_state[id].m_state == SSHConnectionState::STATE_UNAUTHENTICATED)
+	{
+		if(strcmp(payload, g_strUserAuth) != 0)
+		{
+			m_state[id].Clear();
+			m_tcp.CloseSocket(socket);
+			return;
+		}
+
+		OnRxServiceRequestUserAuth(id, socket);
+	}
+
+	else
+		printf("Got SSH_MSG_SERVICE_REQUEST (%s)\n", payload);
+}
+
+/**
+	@brief Handle a SSH_MSG_SERVICE_REQUEST of type "ssh-userauth"
+ */
+void SSHTransportServer::OnRxServiceRequestUserAuth(int id, TCPTableEntry* socket)
+{
+	printf("requested ssh-userauth\n");
+
+	//Send the acceptance reply
+	auto segment = m_tcp.GetTxSegment(socket);
+	auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+	packet->m_type = SSHTransportPacket::SSH_MSG_SERVICE_ACCEPT;
+	auto accept = reinterpret_cast<SSHServiceRequestPacket*>(packet->Payload());
+	auto len = strlen(g_strUserAuth);
+	accept->m_length = len;
+	memcpy(accept->Payload(), g_strUserAuth, len);
+	accept->ByteSwap();
+	SendEncryptedPacket(id, len + sizeof(SSHServiceRequestPacket), segment, packet, socket);
+
+	m_state[id].m_state = SSHConnectionState::STATE_AUTH_BEGIN;
+}
+
+/**
+	@brief Handle a SSH_MSG_USERAUTH_REQUEST packet
+ */
+void SSHTransportServer::OnRxUserAuthRequest(int id, TCPTableEntry* socket, SSHTransportPacket* packet)
+{
+	//verify state
+	if(m_state[id].m_state != SSHConnectionState::STATE_AUTH_BEGIN)
+	{
+		m_state[id].Clear();
+		m_tcp.CloseSocket(socket);
+		return;
+	}
+
+	printf("SSH_MSG_USERAUTH_REQUEST\n");
+}
+
+/**
+	@brief Updates the length etc of a packet, encrypts it, and sends it
+ */
+void SSHTransportServer::SendEncryptedPacket(
+	int id,
+	uint16_t length,
+	TCPSegment* segment,
+	SSHTransportPacket* packet,
+	TCPTableEntry* socket)
+{
+	//Add padding and calculate length
+	packet->UpdateLength(length, m_state[id].m_crypto, true);
+	auto lenOrig = packet->m_packetLength;
+	auto len = lenOrig + sizeof(uint32_t);
+	packet->ByteSwap();
+
+	//Encrypt and send it
+	m_state[id].m_crypto->EncryptAndMAC(&packet->m_paddingLength, lenOrig);
+	m_tcp.SendTxSegment(socket, segment, len + GCM_TAG_SIZE);
 }
 
 /**

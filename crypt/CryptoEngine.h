@@ -120,6 +120,13 @@ public:
 	 */
 	virtual bool DecryptAndVerify(uint8_t* data, uint16_t len) =0;
 
+	/**
+		@brief Encrypts a packet in place, and appends the MAC to it
+
+		The supplied buffer must be large enough to hold the packet plus the MAC.
+	 */
+	virtual void EncryptAndMAC(uint8_t* data, uint16_t len) =0;
+
 protected:
 
 	///@brief Ed25519 SSH host key (public)

@@ -35,7 +35,7 @@
 #define SSHServiceRequestPacket_h
 
 /**
-	@brief A SSH_MSG_SERVICE_REQUEST packet
+	@brief A SSH_MSG_SERVICE_REQUEST packet (also used for SSH_MSG_SERVICE_ACCEPT)
  */
 class __attribute__((packed)) SSHServiceRequestPacket
 {

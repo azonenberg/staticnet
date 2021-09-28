@@ -45,20 +45,23 @@ public:
 
 	enum sshmsg_t
 	{
-		SSH_MSG_IGNORE			= 0x02,
-		SSH_MSG_SERVICE_REQUEST	= 0x05,
+		SSH_MSG_IGNORE				= 0x02,
+		SSH_MSG_SERVICE_REQUEST		= 0x05,
+		SSH_MSG_SERVICE_ACCEPT		= 0x06,
 
-		SSH_MSG_KEXINIT			= 0x14,
-		SSH_MSG_NEWKEYS			= 0x15,
+		SSH_MSG_KEXINIT				= 0x14,
+		SSH_MSG_NEWKEYS				= 0x15,
 
-		SSH_MSG_KEX_ECDH_INIT 	= 0x1e,
-		SSH_MSG_KEX_ECDH_REPLY	= 0x1f
+		SSH_MSG_USERAUTH_REQUEST	= 0x32,
+
+		SSH_MSG_KEX_ECDH_INIT 		= 0x1e,
+		SSH_MSG_KEX_ECDH_REPLY		= 0x1f
 	};
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Padding / cleanup
 
-	void UpdateLength(uint16_t payloadLength, CryptoEngine* crypto);
+	void UpdateLength(uint16_t payloadLength, CryptoEngine* crypto, bool padForEncryption = false);
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Field accessors

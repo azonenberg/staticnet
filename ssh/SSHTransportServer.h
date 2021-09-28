@@ -79,7 +79,9 @@ public:
 		STATE_BANNER_SENT,			//Connection opened, we sent our banner to the client
 		STATE_KEX_INIT_SENT,		//Got the banner, we sent our kex init message to the client
 		STATE_KEX_ECDHINIT_SENT,	//Got the client's ECDH ephemeral key and sent ours
-		STATE_NEWKEYS_SENT,			//Keys created, session is active, but not authenticated yet
+
+		STATE_UNAUTHENTICATED,		//Keys created, session is active, but not authenticated yet
+		STATE_AUTH_BEGIN,			//Sent the service accept for auth
 
 		//TODO
 		STATE_INVALID
@@ -92,6 +94,9 @@ public:
 
 	//If true, we've completed the key exchange and have a MAC at the end of each packet
 	bool m_macPresent;
+
+	//Session ID used by upper layer protocols
+	uint8_t m_sessionID[SHA256_DIGEST_SIZE];
 };
 
 /**
@@ -109,6 +114,13 @@ public:
 	void OnConnectionAccepted(TCPTableEntry* socket);
 	bool OnRxData(TCPTableEntry* socket, uint8_t* payload, uint16_t payloadLen);
 
+	void SendEncryptedPacket(
+		int id,
+		uint16_t length,
+		TCPSegment* segment,
+		SSHTransportPacket* packet,
+		TCPTableEntry* socket);
+
 protected:
 
 	int GetConnectionID(TCPTableEntry* socket);
@@ -116,12 +128,14 @@ protected:
 
 	void OnRxBanner(int id, TCPTableEntry* socket);
 	void OnRxKexInit(int id, TCPTableEntry* socket);
-	bool ValidateKexInit(SSHKexInitPacket* kex);
+	bool ValidateKexInit(SSHKexInitPacket* kex, uint16_t len);
 	void OnRxKexEcdhInit(int id, TCPTableEntry* socket);
 	void OnRxNewKeys(int id, TCPTableEntry* socket);
 	void OnRxEncryptedPacket(int id, TCPTableEntry* socket);
 	void OnRxIgnore(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
 	void OnRxServiceRequest(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
+	void OnRxServiceRequestUserAuth(int id, TCPTableEntry* socket);
+	void OnRxUserAuthRequest(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
 
 	bool IsPacketReady(SSHConnectionState& state);
 	SSHTransportPacket* PeekPacket(SSHConnectionState& state);

@@ -48,7 +48,7 @@ void SSHTransportPacket::ByteSwap()
 /**
 	@brief Fills out the length field in the packet header and appends random padding
  */
-void SSHTransportPacket::UpdateLength(uint16_t payloadLength, CryptoEngine* crypto)
+void SSHTransportPacket::UpdateLength(uint16_t payloadLength, CryptoEngine* crypto, bool padForEncryption)
 {
 	//We need a minimum of 4 bytes of padding
 	m_paddingLength = 4;
@@ -57,13 +57,27 @@ void SSHTransportPacket::UpdateLength(uint16_t payloadLength, CryptoEngine* cryp
 	//Padding length and type are counted towards total length, but the length field itself is not
 	m_packetLength = payloadLength + m_paddingLength + 2;
 
-	//Add extra padding until we hit a multiple of 8 bytes
-	uint32_t paddingMod8 = (m_packetLength + sizeof(uint32_t)) % 8;
-	if(paddingMod8 != 0)
+	if(padForEncryption)
 	{
-		uint32_t extraPaddingToAdd = 8 - paddingMod8;
-		m_paddingLength += extraPaddingToAdd;
-		m_packetLength += extraPaddingToAdd;
+		//Add extra padding until we hit a multiple of 16 bytes
+		uint32_t paddingMod16 = m_packetLength % 16;
+		if(paddingMod16 != 0)
+		{
+			uint32_t extraPaddingToAdd = 16 - paddingMod16;
+			m_paddingLength += extraPaddingToAdd;
+			m_packetLength += extraPaddingToAdd;
+		}
+	}
+	else
+	{
+		//Add extra padding until we hit a multiple of 8 bytes
+		uint32_t paddingMod8 = (m_packetLength + sizeof(uint32_t)) % 8;
+		if(paddingMod8 != 0)
+		{
+			uint32_t extraPaddingToAdd = 8 - paddingMod8;
+			m_paddingLength += extraPaddingToAdd;
+			m_packetLength += extraPaddingToAdd;
+		}
 	}
 
 	//Fill the padding with random data
