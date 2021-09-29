@@ -29,6 +29,7 @@ add_executable(bridge
 
 	main.cpp
 	BridgeCryptoEngine.cpp
+	BridgePasswordAuthenticator.cpp
 	BridgeSSHTransportServer.cpp
 	BridgeTCPProtocol.cpp
 )

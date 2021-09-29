@@ -58,6 +58,7 @@ static const char* g_strAuthMethodPassword	= "password";
 
 SSHTransportServer::SSHTransportServer(TCPProtocol& tcp)
 	: m_tcp(tcp)
+	, m_passwordAuth(NULL)
 {
 }
 
@@ -643,6 +644,7 @@ void SSHTransportServer::OnRxServiceRequest(int id, TCPTableEntry* socket, SSHTr
 		OnRxServiceRequestUserAuth(id, socket);
 	}
 
+	//Authenticated
 	else
 		printf("Got SSH_MSG_SERVICE_REQUEST (%s)\n", payload);
 }
@@ -663,7 +665,7 @@ void SSHTransportServer::OnRxServiceRequestUserAuth(int id, TCPTableEntry* socke
 	accept->ByteSwap();
 	SendEncryptedPacket(id, len + sizeof(SSHServiceRequestPacket), segment, packet, socket);
 
-	m_state[id].m_state = SSHConnectionState::STATE_AUTH_BEGIN;
+	m_state[id].m_state = SSHConnectionState::STATE_AUTH_IN_PROGRESS;
 }
 
 /**
@@ -672,7 +674,7 @@ void SSHTransportServer::OnRxServiceRequestUserAuth(int id, TCPTableEntry* socke
 void SSHTransportServer::OnRxUserAuthRequest(int id, TCPTableEntry* socket, SSHTransportPacket* packet)
 {
 	//verify state
-	if(m_state[id].m_state != SSHConnectionState::STATE_AUTH_BEGIN)
+	if(m_state[id].m_state != SSHConnectionState::STATE_AUTH_IN_PROGRESS)
 	{
 		DropConnection(id, socket);
 		return;
@@ -739,16 +741,25 @@ void SSHTransportServer::OnRxUserAuthRequest(int id, TCPTableEntry* socket, SSHT
 }
 
 /**
-	@brief Handles a SSH_MSG_USERAUTH_REQUEST with type "none"
+	@brief Reports that the previous auth request was uuccessful
  */
-void SSHTransportServer::OnRxAuthTypeQuery(int id, TCPTableEntry* socket)
+void SSHTransportServer::OnRxAuthSuccess(int id, TCPTableEntry* socket)
 {
-	//Send a canned acceptance reply
+	auto segment = m_tcp.GetTxSegment(socket);
+	auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+	packet->m_type = SSHTransportPacket::SSH_MSG_USERAUTH_SUCCESS;
+	SendEncryptedPacket(id, 0, segment, packet, socket);
+}
+
+/**
+	@brief Reports that the previous auth request was unsuccessful
+ */
+void SSHTransportServer::OnRxAuthFail(int id, TCPTableEntry* socket)
+{
 	auto segment = m_tcp.GetTxSegment(socket);
 	auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 	packet->m_type = SSHTransportPacket::SSH_MSG_USERAUTH_FAILURE;
 	auto buf = packet->Payload();
-
 	auto len = strlen(g_authMethodList);
 	buf[0] = 0;
 	buf[1] = 0;
@@ -756,9 +767,15 @@ void SSHTransportServer::OnRxAuthTypeQuery(int id, TCPTableEntry* socket)
 	buf[3] = len;
 	strncpy((char*)buf+4, g_authMethodList, 255);
 	buf[4+len] = 0x00;	//no partial success
-
 	SendEncryptedPacket(id, len+5, segment, packet, socket);
+}
 
+/**
+	@brief Handles a SSH_MSG_USERAUTH_REQUEST with type "none"
+ */
+void SSHTransportServer::OnRxAuthTypeQuery(int id, TCPTableEntry* socket)
+{
+	OnRxAuthFail(id, socket);
 	//no change to state, still waiting for auth to complete
 }
 
@@ -767,8 +784,8 @@ void SSHTransportServer::OnRxAuthTypeQuery(int id, TCPTableEntry* socket)
  */
 void SSHTransportServer::OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSHUserAuthRequestPacket* req)
 {
-	const int string_max = 1024;
-
+	//Extract username and password, and sanity check lengths
+	const int string_max = 512;
 	auto uname = req->GetUserNameStart();
 	auto ulen = req->GetUserNameLength();
 	if(ulen > string_max)
@@ -778,26 +795,39 @@ void SSHTransportServer::OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSH
 	}
 	auto pass = req->GetPasswordStart();
 	auto passlen = req->GetPasswordLength();
-	if( ((pass - uname) + passlen) > string_max)
+	if(passlen > string_max)
 	{
 		DropConnection(id, socket);
 		return;
 	}
 
-	/*
-	//debug prints
-	char tmp_user[32] = {0};
-	if(ulen > 31)
-		ulen = 31;
-	memcpy(tmp_user, uname, ulen);
+	//If we don't have an authenticator, reject the auth request
+	if(!m_passwordAuth)
+	{
+		printf("rejecting auth due to no password authenticator\n");
+		OnRxAuthFail(id, socket);
+		//no change to state, still waiting for auth to complete
+		return;
+	}
 
-	char tmp_pass[32] = {0};
-	if(passlen > 31)
-		passlen = 31;
-	memcpy(tmp_pass, pass, passlen);
+	//Check the credentials
+	if(!m_passwordAuth->TestLogin(
+		uname,
+		ulen,
+		pass,
+		passlen,
+		m_state[id].m_crypto))
+	{
+		printf("authenticator reported bad password\n");
+		OnRxAuthFail(id, socket);
+		//no change to state, still waiting for auth to complete
+		return;
+	}
 
-	printf("SSH_MSG_USERAUTH_REQUEST (user=%s, password=%s)\n", tmp_user, tmp_pass);
-	*/
+	//If we get here, the password was GOOD. Report success.
+	//TODO: save the user ID in the session for upper layer stuff to use??
+	OnRxAuthSuccess(id, socket);
+	m_state[id].m_state = SSHConnectionState::STATE_AUTHENTICATED;
 }
 
 /**

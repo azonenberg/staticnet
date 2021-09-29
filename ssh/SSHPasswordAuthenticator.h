@@ -29,25 +29,31 @@
 
 /**
 	@file
-	@brief Declaration of BridgeSSHTransportServer
+	@brief Declaration of SSHPasswordAuthenticator
  */
-#ifndef BridgeSSHTransportServer_h
-#define BridgeSSHTransportServer_h
-
-#include <ssh/SSHTransportServer.h>
-#include "BridgePasswordAuthenticator.h"
+#ifndef SSHPasswordAuthenticator_h
+#define SSHPasswordAuthenticator_h
 
 /**
-	@brief SSH server class for the bridge test
+	@brief Base class for password authentication providers
  */
-class BridgeSSHTransportServer : public SSHTransportServer
+class SSHPasswordAuthenticator
 {
 public:
-	BridgeSSHTransportServer(TCPProtocol& tcp);
-	virtual ~BridgeSSHTransportServer();
+	virtual ~SSHPasswordAuthenticator() =default;
 
-protected:
-	BridgePasswordAuthenticator m_auth;
+	/**
+		@brief Tests a username/password combination for validity, using the supplied crypto engine for hashing.
+
+		Username and password may not be null terminated.
+	 */
+	virtual bool TestLogin(
+		const char* username,
+		uint16_t username_len,
+		const char* password,
+		uint16_t password_len,
+		CryptoEngine* crypto
+		) =0;
 };
 
 #endif

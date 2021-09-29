@@ -56,7 +56,8 @@ public:
 		SSH_MSG_KEX_ECDH_REPLY		= 31,
 
 		SSH_MSG_USERAUTH_REQUEST	= 50,
-		SSH_MSG_USERAUTH_FAILURE	= 51
+		SSH_MSG_USERAUTH_FAILURE	= 51,
+		SSH_MSG_USERAUTH_SUCCESS	= 52
 	};
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -38,6 +38,8 @@ BridgeSSHTransportServer::BridgeSSHTransportServer(TCPProtocol& tcp)
 	//Initialize crypto engines
 	for(size_t i=0; i<SSH_TABLE_SIZE; i++)
 		m_state[i].m_crypto = new BridgeCryptoEngine;
+
+	UsePasswordAuthenticator(&m_auth);
 }
 
 BridgeSSHTransportServer::~BridgeSSHTransportServer()

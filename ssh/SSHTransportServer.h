@@ -36,6 +36,7 @@
 
 #include "../crypt/CryptoEngine.h"
 #include "../util/CircularFIFO.h"
+#include "SSHPasswordAuthenticator.h"
 
 class SSHTransportPacket;
 class SSHKexInitPacket;
@@ -82,7 +83,8 @@ public:
 		STATE_KEX_ECDHINIT_SENT,	//Got the client's ECDH ephemeral key and sent ours
 
 		STATE_UNAUTHENTICATED,		//Keys created, session is active, but not authenticated yet
-		STATE_AUTH_BEGIN,			//Sent the service accept for auth
+		STATE_AUTH_IN_PROGRESS,		//Sent the service accept for auth
+		STATE_AUTHENTICATED,		//Authentication successful
 
 		//TODO
 		STATE_INVALID
@@ -132,6 +134,12 @@ public:
 		return (memcmp(c_str, pack_str, pack_str_len) == 0);
 	}
 
+	/**
+		@brief Sets the authentication provider we use for checking passwords
+	 */
+	void UsePasswordAuthenticator(SSHPasswordAuthenticator* auth)
+	{ m_passwordAuth = auth; }
+
 protected:
 
 	int GetConnectionID(TCPTableEntry* socket);
@@ -148,7 +156,9 @@ protected:
 	void OnRxServiceRequestUserAuth(int id, TCPTableEntry* socket);
 	void OnRxUserAuthRequest(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
 	void OnRxAuthTypeQuery(int id, TCPTableEntry* socket);
+	void OnRxAuthFail(int id, TCPTableEntry* socket);
 	void OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSHUserAuthRequestPacket* packet);
+	void OnRxAuthSuccess(int id, TCPTableEntry* socket);
 
 	void DropConnection(int id, TCPTableEntry* socket);
 
@@ -158,6 +168,9 @@ protected:
 
 	///@brief The transport layer for our traffic
 	TCPProtocol& m_tcp;
+
+	///@brief The authenticator for password logins
+	SSHPasswordAuthenticator* m_passwordAuth;
 
 	///@brief The SSH connection table
 	SSHConnectionState m_state[SSH_TABLE_SIZE];

@@ -27,27 +27,28 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of BridgeSSHTransportServer
- */
-#ifndef BridgeSSHTransportServer_h
-#define BridgeSSHTransportServer_h
+#include "bridge.h"
+#include <stdlib.h>
 
-#include <ssh/SSHTransportServer.h>
-#include "BridgePasswordAuthenticator.h"
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Main auth checks
 
 /**
-	@brief SSH server class for the bridge test
+	@brief Demo password check against hard-coded values for testing the SSH layer
+
+	A real implementation of this method should check a dynamic database of users and hashed passwords.
  */
-class BridgeSSHTransportServer : public SSHTransportServer
+bool BridgePasswordAuthenticator::TestLogin(
+	const char* username,
+	uint16_t username_len,
+	const char* password,
+	uint16_t password_len,
+	CryptoEngine* /*crypto*/
+	)
 {
-public:
-	BridgeSSHTransportServer(TCPProtocol& tcp);
-	virtual ~BridgeSSHTransportServer();
-
-protected:
-	BridgePasswordAuthenticator m_auth;
-};
-
-#endif
+	if(!SSHTransportServer::StringMatchWithLength("admin", username, username_len))
+		return false;
+	if(!SSHTransportServer::StringMatchWithLength("password", password, password_len))
+		return false;
+	return true;
+}
