@@ -29,62 +29,90 @@
 
 /**
 	@file
-	@brief Declaration of SSHTransportPacket
+	@brief Declaration of SSHUserAuthRequestPacket
  */
-#ifndef SSHTransportPacket_h
-#define SSHTransportPacket_h
-
-class CryptoEngine;
+#ifndef SSHUserAuthRequestPacket_h
+#define SSHUserAuthRequestPacket_h
 
 /**
-	@brief A single packet in the SSH transport layer
+	@brief A SSH_MSG_USERAUTH_REQUEST packet
+
+	Parsing is a bit awkward and inefficient due to the in-place nature of the class
+	(we can't have any member vars other than data in the packet).
  */
-class __attribute__((packed)) SSHTransportPacket
+class __attribute__((packed)) SSHUserAuthRequestPacket
 {
 public:
-
-	enum sshmsg_t
-	{
-		SSH_MSG_IGNORE				= 2,
-		SSH_MSG_SERVICE_REQUEST		= 5,
-		SSH_MSG_SERVICE_ACCEPT		= 6,
-
-		SSH_MSG_KEXINIT				= 20,
-		SSH_MSG_NEWKEYS				= 21,
-
-		SSH_MSG_KEX_ECDH_INIT 		= 30,
-		SSH_MSG_KEX_ECDH_REPLY		= 31,
-
-		SSH_MSG_USERAUTH_REQUEST	= 50,
-		SSH_MSG_USERAUTH_FAILURE	= 51
-	};
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Padding / cleanup
-
-	void UpdateLength(uint16_t payloadLength, CryptoEngine* crypto, bool padForEncryption = false);
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Field accessors
 
-	uint8_t* Payload()
-	{ return reinterpret_cast<uint8_t*>(this) + sizeof(SSHTransportPacket); }
+	/**
+		@brief Gets a pointer to the start of the user name (NOT null terminated)
+	 */
+	char* GetUserNameStart()
+	{ return reinterpret_cast<char*>(&m_usernameLength) + sizeof(uint32_t); }
+
+	/**
+		@brief Gets the length of the user name
+	 */
+	uint32_t GetUserNameLength()
+	{ return __builtin_bswap32(m_usernameLength); }
+
+	/**
+		@brief Gets a pointer to the start of the service name (NOT null terminated)
+	 */
+	char* GetServiceNameStart()
+	{ return GetUserNameStart() + GetUserNameLength() + sizeof(uint32_t); }
+
+	/**
+		@brief Gets the length of the service name
+	 */
+	uint32_t GetServiceNameLength()
+	{ return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetServiceNameStart() - sizeof(uint32_t))); }
+
+	/**
+		@brief Gets a pointer to the start of the auth type (NOT null terminated)
+	 */
+	char* GetAuthTypeStart()
+	{ return GetServiceNameStart() + GetServiceNameLength() + sizeof(uint32_t); }
+
+	/**
+		@brief Gets the length of the auth type
+	 */
+	uint32_t GetAuthTypeLength()
+	{ return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetAuthTypeStart() - sizeof(uint32_t))); }
+
+	/**
+		@brief Gets a pointer to the start of the password (NOT null terminated)
+	 */
+	char* GetPasswordStart()
+	{ return GetAuthTypeStart() + GetAuthTypeLength() + sizeof(uint32_t) + 1; /*skip constant boolean value*/ }
+
+	/**
+		@brief Gets the length of the auth type
+	 */
+	uint32_t GetPasswordLength()
+	{ return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetPasswordStart() - sizeof(uint32_t))); }
+
+	/*
+		if public key
+			string "publickey"
+			bool always_true
+			string pubkey alg name
+			string pubkey to use
+			string signature
+
+		if password
+			string "password"
+			bool always_false
+			string password
+	 */
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Byte ordering correction
+	// Field content
 
-	void ByteSwap();
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Data fields
-
-	uint32_t m_packetLength;	//does not include the length field itself!
-	uint8_t m_paddingLength;
-	uint8_t m_type;
-
-	//After packet:
-	//uint8_t padding[]
-	//uint8_t mac[32]
+	uint32_t m_usernameLength;
 };
 
 #endif

@@ -39,6 +39,7 @@
 
 class SSHTransportPacket;
 class SSHKexInitPacket;
+class SSHUserAuthRequestPacket;
 
 /**
 	@brief State for a single SSH connection
@@ -121,6 +122,16 @@ public:
 		SSHTransportPacket* packet,
 		TCPTableEntry* socket);
 
+	/**
+		@brief Checks if a null terminated C string is equal to an unterminated string with explicit length
+	 */
+	static bool StringMatchWithLength(const char* c_str, const char* pack_str, uint16_t pack_str_len)
+	{
+		if(strlen(c_str) != pack_str_len)
+			return false;
+		return (memcmp(c_str, pack_str, pack_str_len) == 0);
+	}
+
 protected:
 
 	int GetConnectionID(TCPTableEntry* socket);
@@ -136,6 +147,10 @@ protected:
 	void OnRxServiceRequest(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
 	void OnRxServiceRequestUserAuth(int id, TCPTableEntry* socket);
 	void OnRxUserAuthRequest(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
+	void OnRxAuthTypeQuery(int id, TCPTableEntry* socket);
+	void OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSHUserAuthRequestPacket* packet);
+
+	void DropConnection(int id, TCPTableEntry* socket);
 
 	bool IsPacketReady(SSHConnectionState& state);
 	SSHTransportPacket* PeekPacket(SSHConnectionState& state);

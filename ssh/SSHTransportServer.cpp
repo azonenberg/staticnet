@@ -37,16 +37,21 @@
 #include "SSHKexEcdhInitPacket.h"
 #include "SSHKexEcdhReplyPacket.h"
 #include "SSHServiceRequestPacket.h"
+#include "SSHUserAuthRequestPacket.h"
 
 //Our single supported cipher suite
-static const char* g_sshKexAlg			= "curve25519-sha256";				//RFC 8731
-static const char* g_sshHostKeyAlg		= "ssh-ed25519";
-static const char* g_sshEncryptionAlg	= "aes128-gcm@openssh.com";
-static const char* g_sshMacAlg			= "none";	//implicit in GCM
-static const char* g_sshCompressionAlg	= "none";
+static const char* g_sshKexAlg				= "curve25519-sha256";				//RFC 8731
+static const char* g_sshHostKeyAlg			= "ssh-ed25519";
+static const char* g_sshEncryptionAlg		= "aes128-gcm@openssh.com";
+static const char* g_sshMacAlg				= "none";	//implicit in GCM
+static const char* g_sshCompressionAlg		= "none";
 
 //Other global strings for magic values
-static const char* g_strUserAuth		= "ssh-userauth";
+static const char* g_strUserAuth			= "ssh-userauth";
+static const char* g_strConnection			= "ssh-connection";
+static const char* g_strAuthTypeQuery		= "none";
+static const char* g_authMethodList			= "password";
+static const char* g_strAuthMethodPassword	= "password";
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
@@ -172,6 +177,18 @@ bool SSHTransportServer::OnRxData(TCPTableEntry* socket, uint8_t* payload, uint1
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Other miscellaneous helpers
+
+/**
+	@brief Silently drops a connection due to a protocol error or similar
+ */
+void SSHTransportServer::DropConnection(int id, TCPTableEntry* socket)
+{
+	m_state[id].Clear();
+	m_tcp.CloseSocket(socket);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Handle inbound protocol data
 
 /**
@@ -203,11 +220,7 @@ void SSHTransportServer::OnRxBanner(int id, TCPTableEntry* socket)
 		//If banner was more than 512 bytes long and still no newline, assume something is screwy
 		//and drop the connection
 		if(len > 512)
-		{
-			m_state[id].Clear();
-			m_tcp.CloseSocket(socket);
-		}
-
+			DropConnection(id, socket);
 		return;
 	}
 
@@ -215,9 +228,7 @@ void SSHTransportServer::OnRxBanner(int id, TCPTableEntry* socket)
 	//If it's not a SSH2 client, give up
 	if(memcmp(banner, "SSH-2.0", 7) != 0)
 	{
-		//Close our state
-		m_state[id].Clear();
-		m_tcp.CloseSocket(socket);
+		DropConnection(id, socket);
 		return;
 	}
 
@@ -257,8 +268,7 @@ void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 	auto pack = PeekPacket(m_state[id]);
 	if(pack->m_type != SSHTransportPacket::SSH_MSG_KEXINIT)
 	{
-		m_state[id].Clear();
-		m_tcp.CloseSocket(socket);
+		DropConnection(id, socket);
 		return;
 	}
 	pack->ByteSwap();
@@ -268,8 +278,7 @@ void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 	uint32_t lenUnpadded = pack->m_packetLength - (pack->m_paddingLength + 1);
 	if(lenUnpadded > pack->m_packetLength)
 	{
-		m_state[id].Clear();
-		m_tcp.CloseSocket(socket);
+		DropConnection(id, socket);
 		return;
 	}
 	uint32_t lenUnpadded_be = __builtin_bswap32(lenUnpadded);
@@ -280,8 +289,7 @@ void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 	auto kexInit = reinterpret_cast<SSHKexInitPacket*>(pack->Payload());
 	if(!ValidateKexInit(kexInit, lenUnpadded))
 	{
-		m_state[id].Clear();
-		m_tcp.CloseSocket(socket);
+		DropConnection(id, socket);
 		return;
 	}
 
@@ -430,8 +438,7 @@ void SSHTransportServer::OnRxKexEcdhInit(int id, TCPTableEntry* socket)
 	pack->ByteSwap();
 	if(pack->m_type != SSHTransportPacket::SSH_MSG_KEX_ECDH_INIT)
 	{
-		state.Clear();
-		m_tcp.CloseSocket(socket);
+		DropConnection(id, socket);
 		return;
 	}
 
@@ -440,8 +447,7 @@ void SSHTransportServer::OnRxKexEcdhInit(int id, TCPTableEntry* socket)
 	kexEcdh->ByteSwap();
 	if(kexEcdh->m_length != ECDH_KEY_SIZE)
 	{
-		state.Clear();
-		m_tcp.CloseSocket(socket);
+		DropConnection(id, socket);
 		return;
 	}
 
@@ -534,8 +540,7 @@ void SSHTransportServer::OnRxNewKeys(int id, TCPTableEntry* socket)
 	pack->ByteSwap();
 	if(pack->m_type != SSHTransportPacket::SSH_MSG_NEWKEYS)
 	{
-		m_state[id].Clear();
-		m_tcp.CloseSocket(socket);
+		DropConnection(id, socket);
 		return;
 	}
 
@@ -568,16 +573,14 @@ void SSHTransportServer::OnRxEncryptedPacket(int id, TCPTableEntry* socket)
 	//If verification failure, drop the connection and exit
 	if(!m_state[id].m_crypto->DecryptAndVerify(&pack->m_paddingLength, pack->m_packetLength + GCM_TAG_SIZE))
 	{
-		m_state[id].Clear();
-		m_tcp.CloseSocket(socket);
+		DropConnection(id, socket);
 		return;
 	}
 
 	//Sanity check padding length
 	if(pack->m_paddingLength > pack->m_packetLength)
 	{
-		m_state[id].Clear();
-		m_tcp.CloseSocket(socket);
+		DropConnection(id, socket);
 		return;
 	}
 
@@ -619,8 +622,7 @@ void SSHTransportServer::OnRxServiceRequest(int id, TCPTableEntry* socket, SSHTr
 	//bounds check name length
 	if(service->m_length >= packet->m_packetLength)
 	{
-		m_state[id].Clear();
-		m_tcp.CloseSocket(socket);
+		DropConnection(id, socket);
 		return;
 	}
 
@@ -634,8 +636,7 @@ void SSHTransportServer::OnRxServiceRequest(int id, TCPTableEntry* socket, SSHTr
 	{
 		if(strcmp(payload, g_strUserAuth) != 0)
 		{
-			m_state[id].Clear();
-			m_tcp.CloseSocket(socket);
+			DropConnection(id, socket);
 			return;
 		}
 
@@ -651,8 +652,6 @@ void SSHTransportServer::OnRxServiceRequest(int id, TCPTableEntry* socket, SSHTr
  */
 void SSHTransportServer::OnRxServiceRequestUserAuth(int id, TCPTableEntry* socket)
 {
-	printf("requested ssh-userauth\n");
-
 	//Send the acceptance reply
 	auto segment = m_tcp.GetTxSegment(socket);
 	auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
@@ -675,12 +674,130 @@ void SSHTransportServer::OnRxUserAuthRequest(int id, TCPTableEntry* socket, SSHT
 	//verify state
 	if(m_state[id].m_state != SSHConnectionState::STATE_AUTH_BEGIN)
 	{
-		m_state[id].Clear();
-		m_tcp.CloseSocket(socket);
+		DropConnection(id, socket);
 		return;
 	}
 
-	printf("SSH_MSG_USERAUTH_REQUEST\n");
+	const int string_max = 1024;
+
+	//Grab initial string fields out of the packet
+	//Cap string length to be safe
+	auto req = reinterpret_cast<SSHUserAuthRequestPacket*>(packet->Payload());
+	auto ulen = req->GetUserNameLength();
+	if(ulen > string_max)
+	{
+		DropConnection(id, socket);
+		return;
+	}
+	auto sname = req->GetServiceNameStart();
+	auto slen = req->GetServiceNameLength();
+	auto total = ulen + slen;
+	if(total > string_max)
+	{
+		DropConnection(id, socket);
+		return;
+	}
+	auto authtype = req->GetAuthTypeStart();
+	auto authlen = req->GetAuthTypeLength();
+	total += authlen;
+	if(total > string_max)
+	{
+		DropConnection(id, socket);
+		return;
+	}
+
+	//We only support authenticating to one service type "ssh-connection"
+	if(!StringMatchWithLength(g_strConnection, sname, slen))
+	{
+		DropConnection(id, socket);
+		return;
+	}
+
+	//Auth request of type "none" is a query to see what auth types we support
+	if(StringMatchWithLength(g_strAuthTypeQuery, authtype, authlen))
+	{
+		OnRxAuthTypeQuery(id, socket);
+		return;
+	}
+
+	//Trying to authenticate with a password
+	else if(StringMatchWithLength(g_strAuthMethodPassword, authtype, authlen))
+	{
+		OnRxAuthTypePassword(id, socket, req);
+		return;
+	}
+
+	//debug print, unknown type
+	else
+	{
+		char tmp_type[32] = {0};
+		if(authlen > 31)
+			authlen = 31;
+		memcpy(tmp_type, authtype, authlen);
+		printf("SSH_MSG_USERAUTH_REQUEST of type %s\n", tmp_type);
+	}
+}
+
+/**
+	@brief Handles a SSH_MSG_USERAUTH_REQUEST with type "none"
+ */
+void SSHTransportServer::OnRxAuthTypeQuery(int id, TCPTableEntry* socket)
+{
+	//Send a canned acceptance reply
+	auto segment = m_tcp.GetTxSegment(socket);
+	auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+	packet->m_type = SSHTransportPacket::SSH_MSG_USERAUTH_FAILURE;
+	auto buf = packet->Payload();
+
+	auto len = strlen(g_authMethodList);
+	buf[0] = 0;
+	buf[1] = 0;
+	buf[2] = 0;
+	buf[3] = len;
+	strncpy((char*)buf+4, g_authMethodList, 255);
+	buf[4+len] = 0x00;	//no partial success
+
+	SendEncryptedPacket(id, len+5, segment, packet, socket);
+
+	//no change to state, still waiting for auth to complete
+}
+
+/**
+	@brief Handles a SSH_MSG_USERAUTH_REQUEST with type "password"
+ */
+void SSHTransportServer::OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSHUserAuthRequestPacket* req)
+{
+	const int string_max = 1024;
+
+	auto uname = req->GetUserNameStart();
+	auto ulen = req->GetUserNameLength();
+	if(ulen > string_max)
+	{
+		DropConnection(id, socket);
+		return;
+	}
+	auto pass = req->GetPasswordStart();
+	auto passlen = req->GetPasswordLength();
+	if( ((pass - uname) + passlen) > string_max)
+	{
+		DropConnection(id, socket);
+		return;
+	}
+
+	/*
+	//debug prints
+	char tmp_user[32] = {0};
+	if(ulen > 31)
+		ulen = 31;
+	memcpy(tmp_user, uname, ulen);
+
+	char tmp_pass[32] = {0};
+	if(passlen > 31)
+		passlen = 31;
+	memcpy(tmp_pass, pass, passlen);
+
+	printf("SSH_MSG_USERAUTH_REQUEST (user=%s, password=%s)\n", tmp_user, tmp_pass);
+	*/
 }
 
 /**
