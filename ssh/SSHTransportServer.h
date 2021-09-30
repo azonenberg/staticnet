@@ -62,10 +62,11 @@ public:
 		m_macPresent = false;
 		m_valid = false;
 		m_socket = NULL;
-		m_state = STATE_BANNER_SENT;
+		m_state = STATE_BANNER_WAIT;
 		m_sessionChannelID = 0;
 		m_clientWindowWidthChars = 80;
 		m_clientWindowHeightChars = 25;
+		m_rxBuffer.Reset();
 
 		//Zeroize crypto state
 		if(m_crypto)
