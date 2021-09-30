@@ -29,73 +29,41 @@
 
 /**
 	@file
-	@brief Declaration of SSHTransportPacket
+	@brief Declaration of SSHChannelDataPacket
  */
-#ifndef SSHTransportPacket_h
-#define SSHTransportPacket_h
-
-class CryptoEngine;
+#ifndef SSHChannelDataPacket_h
+#define SSHChannelDataPacket_h
 
 /**
-	@brief A single packet in the SSH transport layer
+	@brief A SSH_MSG_CHANNEL_DATA packet
  */
-class __attribute__((packed)) SSHTransportPacket
+class __attribute__((packed)) SSHChannelDataPacket
 {
 public:
 
-	enum sshmsg_t
+	void ByteSwap()
 	{
-		SSH_MSG_DISCONNECT					= 1,
-		SSH_MSG_IGNORE						= 2,
-		SSH_MSG_SERVICE_REQUEST				= 5,
-		SSH_MSG_SERVICE_ACCEPT				= 6,
-
-		SSH_MSG_KEXINIT						= 20,
-		SSH_MSG_NEWKEYS						= 21,
-
-		SSH_MSG_KEX_ECDH_INIT 				= 30,
-		SSH_MSG_KEX_ECDH_REPLY				= 31,
-
-		SSH_MSG_USERAUTH_REQUEST			= 50,
-		SSH_MSG_USERAUTH_FAILURE			= 51,
-		SSH_MSG_USERAUTH_SUCCESS			= 52,
-
-		SSH_MSG_CHANNEL_OPEN				= 90,
-		SSH_MSG_CHANNEL_OPEN_CONFIRMATION	= 91,
-		SSH_MSG_CHANNEL_OPEN_FAILURE		= 92,
-		SSH_MSG_CHANNEL_DATA				= 94,
-		SSH_MSG_CHANNEL_EOF					= 96,
-		SSH_MSG_CHANNEL_REQUEST				= 98,
-		SSH_MSG_CHANNEL_SUCCESS				= 99,
-		SSH_MSG_CHANNEL_FAILURE				= 100,
-	};
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Padding / cleanup
-
-	void UpdateLength(uint16_t payloadLength, CryptoEngine* crypto, bool padForEncryption = false);
+		m_clientChannel	= __builtin_bswap32(m_clientChannel);
+		m_dataLength	= __builtin_bswap32(m_dataLength);
+	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Field accessors
 
-	uint8_t* Payload()
-	{ return reinterpret_cast<uint8_t*>(this) + sizeof(SSHTransportPacket); }
+	/**
+		@brief Gets a pointer to the start of the payload (NOT null terminated)
+	 */
+	char* Payload()
+	{ return reinterpret_cast<char*>(&m_dataLength) + sizeof(uint32_t); }
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Byte ordering correction
+	// Field content
 
-	void ByteSwap();
+	///@brief Channel ID (should match m_sessionChannelID in the state since we only support one channel)
+	uint32_t m_clientChannel;
 
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Data fields
-
-	uint32_t m_packetLength;	//does not include the length field itself!
-	uint8_t m_paddingLength;
-	uint8_t m_type;
-
-	//After packet:
-	//uint8_t padding[]
-	//uint8_t mac[32]
+	///@brief Length of the payload
+	uint32_t m_dataLength;
 };
 
 #endif

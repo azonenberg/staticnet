@@ -37,6 +37,22 @@
 #include <ssh/SSHTransportServer.h>
 #include "BridgePasswordAuthenticator.h"
 
+class SimpleShellContext
+{
+public:
+	SimpleShellContext()
+	{ Reset(); }
+
+	void Reset()
+	{
+		m_position = 0;
+		memset(m_linebuf, 0, sizeof(m_linebuf));
+	}
+
+	char m_linebuf[64];
+	int m_position;
+};
+
 /**
 	@brief SSH server class for the bridge test
  */
@@ -47,7 +63,14 @@ public:
 	virtual ~BridgeSSHTransportServer();
 
 protected:
+	virtual void InitializeShell(int id, TCPTableEntry* socket);
+	virtual void OnRxShellData(int id, TCPTableEntry* socket, char* data, uint16_t len);
+
+	void OnRxShellKeystroke(int id, TCPTableEntry* socket, char c);
+
 	BridgePasswordAuthenticator m_auth;
+
+	SimpleShellContext m_context[SSH_TABLE_SIZE];
 };
 
 #endif

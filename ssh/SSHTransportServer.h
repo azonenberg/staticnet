@@ -64,6 +64,8 @@ public:
 		m_socket = NULL;
 		m_state = STATE_BANNER_SENT;
 		m_sessionChannelID = 0;
+		m_clientWindowWidthChars = 80;
+		m_clientWindowHeightChars = 25;
 
 		//Zeroize crypto state
 		if(m_crypto)
@@ -108,6 +110,12 @@ public:
 
 	///@brief The connection layer channel ID chosen by the client for our session
 	uint32_t m_sessionChannelID;
+
+	///@brief X axis dimension of the client window, in characters
+	uint32_t m_clientWindowWidthChars;
+
+	///@brief Y axis dimension of the client window, in characters
+	uint32_t m_clientWindowHeightChars;
 };
 
 /**
@@ -125,12 +133,17 @@ public:
 	void OnConnectionAccepted(TCPTableEntry* socket);
 	bool OnRxData(TCPTableEntry* socket, uint8_t* payload, uint16_t payloadLen);
 
+	TCPSegment* GetTxSegment(TCPTableEntry* socket)
+	{ return m_tcp.GetTxSegment(socket); }
+
 	void SendEncryptedPacket(
 		int id,
 		uint16_t length,
 		TCPSegment* segment,
 		SSHTransportPacket* packet,
 		TCPTableEntry* socket);
+
+	void SendSessionData(int id, TCPTableEntry* socket, const char* data, uint16_t length);
 
 	/**
 		@brief Checks if a null terminated C string is equal to an unterminated string with explicit length
@@ -171,8 +184,20 @@ protected:
 	void OnRxChannelOpenSession(int id, TCPTableEntry* socket, SSHSessionRequestPacket* packet);
 	void OnRxChannelRequest(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
 	void OnRxPtyRequest(int id, SSHPtyRequestPacket* packet);
+	void OnRxChannelData(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
 
 	void DropConnection(int id, TCPTableEntry* socket);
+	void GracefulDisconnect(int id, TCPTableEntry* socket);
+
+	/**
+		@brief Called when a session initializes and runs a shell
+	 */
+	virtual void InitializeShell(int id, TCPTableEntry* socket) =0;
+
+	/**
+		@brief Called when new data comes in from stdin on a client session
+	 */
+	virtual void OnRxShellData(int id, TCPTableEntry* socket, char* data, uint16_t len) =0;
 
 	bool IsPacketReady(SSHConnectionState& state);
 	SSHTransportPacket* PeekPacket(SSHConnectionState& state);

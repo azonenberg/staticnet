@@ -51,3 +51,70 @@ BridgeSSHTransportServer::~BridgeSSHTransportServer()
 		m_state[i].m_crypto = NULL;
 	}
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Run a trivial shell
+
+void BridgeSSHTransportServer::InitializeShell(int id, TCPTableEntry* socket)
+{
+	m_context[id].Reset();
+	const char* prompt = "shell> ";
+	SendSessionData(id, socket, prompt, strlen(prompt));
+}
+
+void BridgeSSHTransportServer::OnRxShellData(int id, TCPTableEntry* socket, char* data, uint16_t len)
+{
+	for(uint16_t i=0; i<len; i++)
+		OnRxShellKeystroke(id, socket, data[i]);
+}
+
+void BridgeSSHTransportServer::OnRxShellKeystroke(int id, TCPTableEntry* socket, char c)
+{
+	auto& ctx = m_context[id];
+
+	//Backspace
+	if(c == '\b')
+	{
+		printf("Backspace\n");
+
+		//Start of line? Nothing to do
+		if(ctx.m_position == 0)
+		{
+		}
+
+		//back up
+		else
+		{
+			const char* backspace = "\b \b";
+			SendSessionData(id, socket, backspace, strlen(backspace));
+			ctx.m_position --;
+		}
+	}
+
+	else if( (c == '\n') || (c == '\r') )
+	{
+		const char* msg = "\r\nYou typed a command!\r\nshell> ";
+		SendSessionData(id, socket, msg, strlen(msg));
+
+		if(!strcmp(ctx.m_linebuf, "exit"))
+			GracefulDisconnect(id, socket);
+
+		ctx.m_position = 0;
+		memset(ctx.m_linebuf, 0, sizeof(ctx.m_linebuf));
+	}
+
+	//normal character
+	else if(isprint(c) || isspace(c))
+	{
+		//End of buffer? nothing to do
+		if(ctx.m_position >= 62)
+		{
+		}
+
+		ctx.m_linebuf[ctx.m_position] = c;
+		ctx.m_position ++;
+
+		//echo it
+		SendSessionData(id, socket, &c, 1);
+	}
+}

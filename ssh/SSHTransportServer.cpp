@@ -44,6 +44,8 @@
 #include "SSHChannelRequestPacket.h"
 #include "SSHChannelStatusPacket.h"
 #include "SSHPtyRequestPacket.h"
+#include "SSHChannelDataPacket.h"
+#include "SSHDisconnectPacket.h"
 
 //Our single supported cipher suite
 static const char* g_sshKexAlg				= "curve25519-sha256";				//RFC 8731
@@ -191,12 +193,54 @@ bool SSHTransportServer::OnRxData(TCPTableEntry* socket, uint8_t* payload, uint1
 // Other miscellaneous helpers
 
 /**
+	@brief Gracefully disconnects from a session
+ */
+void SSHTransportServer::GracefulDisconnect(int id, TCPTableEntry* socket)
+{
+	//Close our channel
+	auto segment = m_tcp.GetTxSegment(socket);
+	auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+	reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_EOF;
+	auto stat = reinterpret_cast<SSHChannelStatusPacket*>(reply->Payload());
+	stat->m_clientChannel = m_state[id].m_sessionChannelID;
+	stat->ByteSwap();
+	SendEncryptedPacket(id, sizeof(SSHChannelStatusPacket), segment, reply, socket);
+
+	//Done
+	m_state[id].Clear();
+	m_tcp.CloseSocket(socket);
+}
+
+/**
 	@brief Silently drops a connection due to a protocol error or similar
  */
 void SSHTransportServer::DropConnection(int id, TCPTableEntry* socket)
 {
+	//TODO: send SSH_MSG_DISCONNECT?
+
 	m_state[id].Clear();
 	m_tcp.CloseSocket(socket);
+}
+
+/**
+	@brief Helper for sending session data to the client
+ */
+void SSHTransportServer::SendSessionData(int id, TCPTableEntry* socket, const char* data, uint16_t length)
+{
+	//max 1K per packet for now
+	if(length > 1024)
+		return;
+
+	//Close our channel
+	auto segment = m_tcp.GetTxSegment(socket);
+	auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+	reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_DATA;
+	auto dat = reinterpret_cast<SSHChannelDataPacket*>(reply->Payload());
+	dat->m_clientChannel = m_state[id].m_sessionChannelID;
+	dat->m_dataLength = length;
+	memcpy(dat->Payload(), data, length);
+	dat->ByteSwap();
+	SendEncryptedPacket(id, sizeof(SSHChannelDataPacket) + length, segment, reply, socket);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -621,6 +665,10 @@ void SSHTransportServer::OnRxEncryptedPacket(int id, TCPTableEntry* socket)
 			OnRxChannelRequest(id, socket, pack);
 			break;
 
+		case SSHTransportPacket::SSH_MSG_CHANNEL_DATA:
+			OnRxChannelData(id, socket, pack);
+			break;
+
 		default:
 			printf("Got unexpected packet (type %d)\n", pack->m_type);
 	}
@@ -878,7 +926,7 @@ void SSHTransportServer::OnRxChannelOpen(int id, TCPTableEntry* socket, SSHTrans
 		auto segment = m_tcp.GetTxSegment(socket);
 		auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 		reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_OPEN_FAILURE;
-		auto fail = reinterpret_cast<SSHChannelOpenFailurePacket*>(packet->Payload());
+		auto fail = reinterpret_cast<SSHChannelOpenFailurePacket*>(reply->Payload());
 		auto client_channel = __builtin_bswap32(*reinterpret_cast<uint32_t*>(payload + len + 4));
 		fail->m_clientChannel = client_channel;
 		fail->m_reasonCode = SSHChannelOpenFailurePacket::SSH_OPEN_UNKNOWN_CHANNEL_TYPE;
@@ -919,9 +967,7 @@ void SSHTransportServer::OnRxChannelRequest(int id, TCPTableEntry* socket, SSHTr
 		//environment variables are ignored, but we don't error on them
 	}
 	else if(StringMatchWithLength(g_strShellReq, payload->GetRequestTypeStart(), payload->m_requestTypeLength))
-	{
-		printf("shell todo\n");
-	}
+		InitializeShell(id, socket);
 
 	//Unknown/unsupported type
 	else
@@ -957,9 +1003,18 @@ void SSHTransportServer::OnRxChannelRequest(int id, TCPTableEntry* socket, SSHTr
  */
 void SSHTransportServer::OnRxPtyRequest(int id, SSHPtyRequestPacket* packet)
 {
-	packet->ByteSwap();
+	//Excessively long type length? ignore rest of the packet
+	int typelen = packet->GetTermTypeLength();
+	if(typelen > 256)
+	{
+		return;
+	}
 
-	printf("pty-req\n");
+	//For now, ignore pixel dimensions and terminal type
+
+	//Save character dimensions in the session state
+	m_state[id].m_clientWindowWidthChars = packet->GetTermWidthChars();
+	m_state[id].m_clientWindowHeightChars = packet->GetTermHeightChars();
 }
 
 /**
@@ -980,9 +1035,42 @@ void SSHTransportServer::OnRxChannelOpenSession(int id, TCPTableEntry* socket, S
 	confirm->m_clientChannel = packet->m_senderChannel;
 	confirm->m_serverChannel = 0;
 	confirm->m_initialWindowSize = SSH_RX_BUFFER_SIZE;
-	confirm->m_maxPacketSize = SSH_RX_BUFFER_SIZE;
+	confirm->m_maxPacketSize = 1024;
 	confirm->ByteSwap();
 	SendEncryptedPacket(id, sizeof(SSHChannelOpenConfirmationPacket), segment, reply, socket);
+}
+
+/**
+	@brief Handles a SSH_MSG_CHANNEL_DATA packet
+ */
+void SSHTransportServer::OnRxChannelData(int id, TCPTableEntry* socket, SSHTransportPacket* packet)
+{
+	//Only valid in an authenticated session
+	if(m_state[id].m_state != SSHConnectionState::STATE_AUTHENTICATED)
+	{
+		DropConnection(id, socket);
+		return;
+	}
+
+	auto dpack = reinterpret_cast<SSHChannelDataPacket*>(packet->Payload());
+	dpack->ByteSwap();
+
+	//Must be from our active channel
+	if(m_state[id].m_sessionChannelID != dpack->m_clientChannel)
+	{
+		DropConnection(id, socket);
+		return;
+	}
+
+	//Sanity check packet length
+	if(dpack->m_dataLength > 1024)
+	{
+		DropConnection(id, socket);
+		return;
+	}
+
+	//All good, pass it to the shell
+	OnRxShellData(id, socket, dpack->Payload(), dpack->m_dataLength);
 }
 
 /**
