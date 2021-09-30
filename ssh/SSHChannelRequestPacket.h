@@ -29,71 +29,53 @@
 
 /**
 	@file
-	@brief Declaration of SSHTransportPacket
+	@brief Declaration of SSHChannelRequestPacket
  */
-#ifndef SSHTransportPacket_h
-#define SSHTransportPacket_h
-
-class CryptoEngine;
+#ifndef SSHChannelRequestPacket_h
+#define SSHChannelRequestPacket_h
 
 /**
-	@brief A single packet in the SSH transport layer
+	@brief A SSH_MSG_CHANNEL_REQUEST packet
  */
-class __attribute__((packed)) SSHTransportPacket
+class __attribute__((packed)) SSHChannelRequestPacket
 {
 public:
 
-	enum sshmsg_t
+	void ByteSwap()
 	{
-		SSH_MSG_DISCONNECT					= 1,
-		SSH_MSG_IGNORE						= 2,
-		SSH_MSG_SERVICE_REQUEST				= 5,
-		SSH_MSG_SERVICE_ACCEPT				= 6,
-
-		SSH_MSG_KEXINIT						= 20,
-		SSH_MSG_NEWKEYS						= 21,
-
-		SSH_MSG_KEX_ECDH_INIT 				= 30,
-		SSH_MSG_KEX_ECDH_REPLY				= 31,
-
-		SSH_MSG_USERAUTH_REQUEST			= 50,
-		SSH_MSG_USERAUTH_FAILURE			= 51,
-		SSH_MSG_USERAUTH_SUCCESS			= 52,
-
-		SSH_MSG_CHANNEL_OPEN				= 90,
-		SSH_MSG_CHANNEL_OPEN_CONFIRMATION	= 91,
-		SSH_MSG_CHANNEL_OPEN_FAILURE		= 92,
-		SSH_MSG_CHANNEL_REQUEST				= 98,
-		SSH_MSG_CHANNEL_SUCCESS				= 99,
-		SSH_MSG_CHANNEL_FAILURE				= 100,
-	};
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Padding / cleanup
-
-	void UpdateLength(uint16_t payloadLength, CryptoEngine* crypto, bool padForEncryption = false);
+		m_clientChannel	= __builtin_bswap32(m_clientChannel);
+		m_requestTypeLength		= __builtin_bswap32(m_requestTypeLength);
+	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Field accessors
 
+	/**
+		@brief Gets a pointer to the start of the request type (NOT null terminated)
+	 */
+	char* GetRequestTypeStart()
+	{ return reinterpret_cast<char*>(&m_requestTypeLength) + sizeof(uint32_t); }
+
+	bool WantReply()
+	{
+		//sanity check on type length
+		if(m_requestTypeLength > 256)
+			return false;
+
+		return (GetRequestTypeStart()[m_requestTypeLength]) != 0;
+	}
+
 	uint8_t* Payload()
-	{ return reinterpret_cast<uint8_t*>(this) + sizeof(SSHTransportPacket); }
+	{ return reinterpret_cast<uint8_t*>(GetRequestTypeStart() + m_requestTypeLength + 1); }
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Byte ordering correction
+	// Field content
 
-	void ByteSwap();
+	///@brief Channel ID (should match m_sessionChannelID in the state since we only support one channel)
+	uint32_t m_clientChannel;
 
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Data fields
-
-	uint32_t m_packetLength;	//does not include the length field itself!
-	uint8_t m_paddingLength;
-	uint8_t m_type;
-
-	//After packet:
-	//uint8_t padding[]
-	//uint8_t mac[32]
+	///@brief Length of the request type
+	uint32_t m_requestTypeLength;
 };
 
 #endif

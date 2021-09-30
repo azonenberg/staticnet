@@ -41,6 +41,8 @@
 class SSHTransportPacket;
 class SSHKexInitPacket;
 class SSHUserAuthRequestPacket;
+class SSHSessionRequestPacket;
+class SSHPtyRequestPacket;
 
 /**
 	@brief State for a single SSH connection
@@ -61,6 +63,7 @@ public:
 		m_valid = false;
 		m_socket = NULL;
 		m_state = STATE_BANNER_SENT;
+		m_sessionChannelID = 0;
 
 		//Zeroize crypto state
 		if(m_crypto)
@@ -91,15 +94,20 @@ public:
 
 	} m_state;
 
+	///@brief The crypto engine containing key material for this session
 	CryptoEngine* m_crypto;
 
+	///@brief Packet reassembly buffer (may span multiple TCP segments)
 	CircularFIFO<SSH_RX_BUFFER_SIZE> m_rxBuffer;
 
-	//If true, we've completed the key exchange and have a MAC at the end of each packet
+	///@brief If true, we've completed the key exchange and have a MAC at the end of each packet
 	bool m_macPresent;
 
-	//Session ID used by upper layer protocols
+	///@brief Session ID used by upper layer protocols
 	uint8_t m_sessionID[SHA256_DIGEST_SIZE];
+
+	///@brief The connection layer channel ID chosen by the client for our session
+	uint32_t m_sessionChannelID;
 };
 
 /**
@@ -159,6 +167,10 @@ protected:
 	void OnRxAuthFail(int id, TCPTableEntry* socket);
 	void OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSHUserAuthRequestPacket* packet);
 	void OnRxAuthSuccess(int id, TCPTableEntry* socket);
+	void OnRxChannelOpen(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
+	void OnRxChannelOpenSession(int id, TCPTableEntry* socket, SSHSessionRequestPacket* packet);
+	void OnRxChannelRequest(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
+	void OnRxPtyRequest(int id, SSHPtyRequestPacket* packet);
 
 	void DropConnection(int id, TCPTableEntry* socket);
 

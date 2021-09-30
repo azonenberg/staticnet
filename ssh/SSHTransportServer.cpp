@@ -38,6 +38,12 @@
 #include "SSHKexEcdhReplyPacket.h"
 #include "SSHServiceRequestPacket.h"
 #include "SSHUserAuthRequestPacket.h"
+#include "SSHSessionRequestPacket.h"
+#include "SSHChannelOpenFailurePacket.h"
+#include "SSHChannelOpenConfirmationPacket.h"
+#include "SSHChannelRequestPacket.h"
+#include "SSHChannelStatusPacket.h"
+#include "SSHPtyRequestPacket.h"
 
 //Our single supported cipher suite
 static const char* g_sshKexAlg				= "curve25519-sha256";				//RFC 8731
@@ -52,6 +58,10 @@ static const char* g_strConnection			= "ssh-connection";
 static const char* g_strAuthTypeQuery		= "none";
 static const char* g_authMethodList			= "password";
 static const char* g_strAuthMethodPassword	= "password";
+static const char* g_strSession				= "session";
+static const char* g_strPtyReq				= "pty-req";
+static const char* g_strEnvReq				= "env-req";
+static const char* g_strShellReq			= "shell";
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
@@ -587,6 +597,10 @@ void SSHTransportServer::OnRxEncryptedPacket(int id, TCPTableEntry* socket)
 
 	switch(pack->m_type)
 	{
+		case SSHTransportPacket::SSH_MSG_DISCONNECT:
+			DropConnection(id, socket);
+			return;
+
 		case SSHTransportPacket::SSH_MSG_IGNORE:
 			OnRxIgnore(id, socket, pack);
 			break;
@@ -597,6 +611,14 @@ void SSHTransportServer::OnRxEncryptedPacket(int id, TCPTableEntry* socket)
 
 		case SSHTransportPacket::SSH_MSG_USERAUTH_REQUEST:
 			OnRxUserAuthRequest(id, socket, pack);
+			break;
+
+		case SSHTransportPacket::SSH_MSG_CHANNEL_OPEN:
+			OnRxChannelOpen(id, socket, pack);
+			break;
+
+		case SSHTransportPacket::SSH_MSG_CHANNEL_REQUEST:
+			OnRxChannelRequest(id, socket, pack);
 			break;
 
 		default:
@@ -828,6 +850,139 @@ void SSHTransportServer::OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSH
 	//TODO: save the user ID in the session for upper layer stuff to use??
 	OnRxAuthSuccess(id, socket);
 	m_state[id].m_state = SSHConnectionState::STATE_AUTHENTICATED;
+}
+
+/**
+	@brief Handles a SSH_MSG_CHANNEL_OPEN packet
+ */
+void SSHTransportServer::OnRxChannelOpen(int id, TCPTableEntry* socket, SSHTransportPacket* packet)
+{
+	//Only valid in an authenticated session
+	if(m_state[id].m_state != SSHConnectionState::STATE_AUTHENTICATED)
+	{
+		DropConnection(id, socket);
+		return;
+	}
+
+	//Grab the payload and see what type it is
+	auto payload = packet->Payload();
+	auto len = __builtin_bswap32(*reinterpret_cast<uint32_t*>(payload));
+	if(StringMatchWithLength(g_strSession, reinterpret_cast<const char*>(payload+sizeof(uint32_t)), len))
+	{
+		OnRxChannelOpenSession(id, socket, reinterpret_cast<SSHSessionRequestPacket*>(payload));
+	}
+
+	//Unsupported type, discard it
+	else
+	{
+		auto segment = m_tcp.GetTxSegment(socket);
+		auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+		reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_OPEN_FAILURE;
+		auto fail = reinterpret_cast<SSHChannelOpenFailurePacket*>(packet->Payload());
+		auto client_channel = __builtin_bswap32(*reinterpret_cast<uint32_t*>(payload + len + 4));
+		fail->m_clientChannel = client_channel;
+		fail->m_reasonCode = SSHChannelOpenFailurePacket::SSH_OPEN_UNKNOWN_CHANNEL_TYPE;
+		fail->m_descriptionLengthAlwaysZero = 0;
+		fail->m_languageTagAlwaysZero = 0;
+
+		fail->ByteSwap();
+		SendEncryptedPacket(id, sizeof(SSHChannelOpenFailurePacket), segment, reply, socket);
+	}
+}
+
+/**
+	@brief Handles a SSH_MSG_CHANNEL_REQUEST packet
+ */
+void SSHTransportServer::OnRxChannelRequest(int id, TCPTableEntry* socket, SSHTransportPacket* packet)
+{
+	//Only valid in an authenticated session
+	if(m_state[id].m_state != SSHConnectionState::STATE_AUTHENTICATED)
+	{
+		DropConnection(id, socket);
+		return;
+	}
+
+	//Grab the payload and verify channel ID and request type length
+	auto payload = reinterpret_cast<SSHChannelRequestPacket*>(packet->Payload());
+	payload->ByteSwap();
+	if( (payload->m_clientChannel != m_state[id].m_sessionChannelID) || (payload->m_requestTypeLength > 256) )
+	{
+		DropConnection(id, socket);
+		return;
+	}
+
+	//Check type
+	if(StringMatchWithLength(g_strPtyReq, payload->GetRequestTypeStart(), payload->m_requestTypeLength))
+		OnRxPtyRequest(id, reinterpret_cast<SSHPtyRequestPacket*>(payload->Payload()));
+	else if(StringMatchWithLength(g_strEnvReq, payload->GetRequestTypeStart(), payload->m_requestTypeLength))
+	{
+		//environment variables are ignored, but we don't error on them
+	}
+	else if(StringMatchWithLength(g_strShellReq, payload->GetRequestTypeStart(), payload->m_requestTypeLength))
+	{
+		printf("shell todo\n");
+	}
+
+	//Unknown/unsupported type
+	else
+	{
+		if(payload->WantReply())
+		{
+			auto segment = m_tcp.GetTxSegment(socket);
+			auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+			reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_FAILURE;
+			auto fail = reinterpret_cast<SSHChannelStatusPacket*>(packet->Payload());
+			fail->m_clientChannel = m_state[id].m_sessionChannelID;
+			fail->ByteSwap();
+			SendEncryptedPacket(id, sizeof(SSHChannelStatusPacket), segment, reply, socket);
+		}
+		return;
+	}
+
+	//Request was successful, acknowledge if client wants us to
+	if(payload->WantReply())
+	{
+		auto segment = m_tcp.GetTxSegment(socket);
+		auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+		reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_SUCCESS;
+		auto success = reinterpret_cast<SSHChannelStatusPacket*>(packet->Payload());
+		success->m_clientChannel = m_state[id].m_sessionChannelID;
+		success->ByteSwap();
+		SendEncryptedPacket(id, sizeof(SSHChannelStatusPacket), segment, reply, socket);
+	}
+}
+
+/**
+	@brief Handles an SSH_MSG_CHANNEL_REQUEST of type "pty-req"
+ */
+void SSHTransportServer::OnRxPtyRequest(int id, SSHPtyRequestPacket* packet)
+{
+	packet->ByteSwap();
+
+	printf("pty-req\n");
+}
+
+/**
+	@brief Handles a SSH_MSG_CHANNEL_OPEN packet of type "ssh-session"
+ */
+void SSHTransportServer::OnRxChannelOpenSession(int id, TCPTableEntry* socket, SSHSessionRequestPacket* packet)
+{
+	//Save the channel ID, but ignore window and max packet size for now
+	//We send tiny chunks of data in <2 kB packets, any compliant implementation can handle that
+	packet->ByteSwap();
+	m_state[id].m_sessionChannelID = packet->m_senderChannel;
+
+	//Send the reply confirming we opened it
+	auto segment = m_tcp.GetTxSegment(socket);
+	auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+	reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_OPEN_CONFIRMATION;
+	auto confirm = reinterpret_cast<SSHChannelOpenConfirmationPacket*>(reply->Payload());
+	confirm->m_clientChannel = packet->m_senderChannel;
+	confirm->m_serverChannel = 0;
+	confirm->m_initialWindowSize = SSH_RX_BUFFER_SIZE;
+	confirm->m_maxPacketSize = SSH_RX_BUFFER_SIZE;
+	confirm->ByteSwap();
+	SendEncryptedPacket(id, sizeof(SSHChannelOpenConfirmationPacket), segment, reply, socket);
 }
 
 /**

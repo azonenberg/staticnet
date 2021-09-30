@@ -95,20 +95,6 @@ public:
 	uint32_t GetPasswordLength()
 	{ return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetPasswordStart() - sizeof(uint32_t))); }
 
-	/*
-		if public key
-			string "publickey"
-			bool always_true
-			string pubkey alg name
-			string pubkey to use
-			string signature
-
-		if password
-			string "password"
-			bool always_false
-			string password
-	 */
-
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Field content
 
