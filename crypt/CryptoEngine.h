@@ -34,7 +34,7 @@
 #ifndef CryptoEngine_h
 #define CryptoEngine_h
 
-#include <contrib/tweetnacl_25519.h>
+#include <staticnet/contrib/tweetnacl_25519.h>
 
 #define ECDH_KEY_SIZE		32
 #define SHA256_DIGEST_SIZE	32

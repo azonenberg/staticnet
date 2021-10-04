@@ -30,14 +30,13 @@
 /**
 	@file
 	@brief Main header file for staticnet library.
-
-	Copy this file into your project and customize for your requirements.
-
-	You must include your project-specific staticnet-config.h before this file.
  */
 
 #ifndef staticnet_h
 #define staticnet_h
+
+//provided by your project, must be in the search path
+#include <staticnet-config.h>
 
 #include <stdint.h>
 #include <memory.h>

@@ -32,7 +32,7 @@
 	@brief Implementation of EthernetFrame non-inline functions
  */
 #include <staticnet-config.h>
-#include <stack/staticnet.h>
+#include <staticnet/stack/staticnet.h>
 
 /**
 	@brief Swap bytes in multi-byte fields between network and host byte ordering

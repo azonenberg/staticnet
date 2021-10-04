@@ -30,7 +30,7 @@
 #include <stdio.h>
 
 #include <staticnet-config.h>
-#include <stack/staticnet.h>
+#include "../stack/staticnet.h"
 #include "SSHTransportServer.h"
 #include "SSHTransportPacket.h"
 #include "SSHKexInitPacket.h"
@@ -813,8 +813,10 @@ void SSHTransportServer::OnRxUserAuthRequest(int id, TCPTableEntry* socket, SSHT
 /**
 	@brief Reports that the previous auth request was uuccessful
  */
-void SSHTransportServer::OnRxAuthSuccess(int id, TCPTableEntry* socket)
+void SSHTransportServer::OnRxAuthSuccess(int id, const char* username, int16_t usernamelen, TCPTableEntry* socket)
 {
+	strncpy(m_state[id].m_username, username, usernamelen);
+
 	auto segment = m_tcp.GetTxSegment(socket);
 	auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 	packet->m_type = SSHTransportPacket::SSH_MSG_USERAUTH_SUCCESS;
@@ -855,17 +857,16 @@ void SSHTransportServer::OnRxAuthTypeQuery(int id, TCPTableEntry* socket)
 void SSHTransportServer::OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSHUserAuthRequestPacket* req)
 {
 	//Extract username and password, and sanity check lengths
-	const int string_max = 512;
 	auto uname = req->GetUserNameStart();
 	auto ulen = req->GetUserNameLength();
-	if(ulen > string_max)
+	if(ulen >= SSH_MAX_USERNAME)
 	{
 		DropConnection(id, socket);
 		return;
 	}
 	auto pass = req->GetPasswordStart();
 	auto passlen = req->GetPasswordLength();
-	if(passlen > string_max)
+	if(passlen >= SSH_MAX_PASSWORD)
 	{
 		DropConnection(id, socket);
 		return;
@@ -895,8 +896,7 @@ void SSHTransportServer::OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSH
 	}
 
 	//If we get here, the password was GOOD. Report success.
-	//TODO: save the user ID in the session for upper layer stuff to use??
-	OnRxAuthSuccess(id, socket);
+	OnRxAuthSuccess(id, uname, ulen, socket);
 	m_state[id].m_state = SSHConnectionState::STATE_AUTHENTICATED;
 }
 

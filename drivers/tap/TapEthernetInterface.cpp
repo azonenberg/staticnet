@@ -28,7 +28,7 @@
 ***********************************************************************************************************************/
 
 #include <staticnet-config.h>
-#include <stack/staticnet.h>
+#include <staticnet/stack/staticnet.h>
 #include "TapEthernetInterface.h"
 
 #include <unistd.h>

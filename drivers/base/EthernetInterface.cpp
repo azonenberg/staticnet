@@ -28,7 +28,7 @@
 ***********************************************************************************************************************/
 
 #include <staticnet-config.h>
-#include <stack/staticnet.h>
+#include "../../stack/staticnet.h"
 
 EthernetInterface::~EthernetInterface()
 {

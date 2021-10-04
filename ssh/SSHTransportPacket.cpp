@@ -27,10 +27,8 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-#include <stdio.h>
-
 #include <staticnet-config.h>
-#include <stack/staticnet.h>
+#include "../stack/staticnet.h"
 #include "SSHTransportServer.h"
 #include "SSHTransportPacket.h"
 

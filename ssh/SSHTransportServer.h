@@ -67,6 +67,7 @@ public:
 		m_clientWindowWidthChars = 80;
 		m_clientWindowHeightChars = 25;
 		m_rxBuffer.Reset();
+		memset(m_username, 0, SSH_MAX_USERNAME);
 
 		//Zeroize crypto state
 		if(m_crypto)
@@ -117,6 +118,9 @@ public:
 
 	///@brief Y axis dimension of the client window, in characters
 	uint32_t m_clientWindowHeightChars;
+
+	///@brief Username
+	char m_username[SSH_MAX_USERNAME];
 };
 
 /**
@@ -180,7 +184,7 @@ protected:
 	void OnRxAuthTypeQuery(int id, TCPTableEntry* socket);
 	void OnRxAuthFail(int id, TCPTableEntry* socket);
 	void OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSHUserAuthRequestPacket* packet);
-	void OnRxAuthSuccess(int id, TCPTableEntry* socket);
+	void OnRxAuthSuccess(int id, const char* username, int16_t usernamelen, TCPTableEntry* socket);
 	void OnRxChannelOpen(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
 	void OnRxChannelOpenSession(int id, TCPTableEntry* socket, SSHSessionRequestPacket* packet);
 	void OnRxChannelRequest(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
