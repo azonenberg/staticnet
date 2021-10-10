@@ -50,6 +50,15 @@ public:
 	virtual void PutString(const char* str);
 	virtual void Flush();
 
+	SSHTransportServer* GetServer()
+	{ return m_server; }
+
+	int GetSessionID()
+	{ return m_sessid; }
+
+	TCPTableEntry* GetSocket()
+	{ return m_socket; }
+
 protected:
 	int m_sessid;
 	TCPTableEntry* m_socket;

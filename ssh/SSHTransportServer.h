@@ -166,6 +166,8 @@ public:
 	void UsePasswordAuthenticator(SSHPasswordAuthenticator* auth)
 	{ m_passwordAuth = auth; }
 
+	void GracefulDisconnect(int id, TCPTableEntry* socket);
+
 protected:
 
 	int GetConnectionID(TCPTableEntry* socket);
@@ -192,7 +194,6 @@ protected:
 	void OnRxChannelData(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
 
 	void DropConnection(int id, TCPTableEntry* socket);
-	void GracefulDisconnect(int id, TCPTableEntry* socket);
 
 	/**
 		@brief Called when a session initializes and runs a shell
