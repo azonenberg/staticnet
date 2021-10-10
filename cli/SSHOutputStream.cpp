@@ -50,6 +50,11 @@ void SSHOutputStream::Initialize(int sessid, TCPTableEntry* socket, SSHTransport
 	m_fifo.Reset();
 }
 
+void SSHOutputStream::Disconnect()
+{
+	m_server->GracefulDisconnect(m_sessid, m_socket);
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Output processing
 

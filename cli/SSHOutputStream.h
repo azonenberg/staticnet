@@ -59,6 +59,8 @@ public:
 	TCPTableEntry* GetSocket()
 	{ return m_socket; }
 
+	virtual void Disconnect();
+
 protected:
 	int m_sessid;
 	TCPTableEntry* m_socket;
