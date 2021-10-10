@@ -61,7 +61,7 @@ TapEthernetInterface::TapEthernetInterface(const char* name)
 	ifreq ifr;
 	memset(&ifr, 0, sizeof(ifr));
 	ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-	strncpy(ifr.ifr_name, name, IFNAMSIZ);
+	strncpy(ifr.ifr_name, name, IFNAMSIZ-1);
 	if(ioctl(m_hTun, TUNSETIFF, &ifr) < 0)
 	{
 		close(m_hTun);
