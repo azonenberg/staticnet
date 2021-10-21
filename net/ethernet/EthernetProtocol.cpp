@@ -57,8 +57,6 @@ void EthernetProtocol::OnRxFrame(EthernetFrame* frame)
 	auto& dst = frame->DstMAC();
 	if( (dst != m_mac) && !dst.IsMulticast())
 	{
-		printf("    Ignoring dest MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
-			dst[0], dst[1], dst[2], dst[3], dst[4], dst[5]);
 		m_iface.ReleaseRxFrame(frame);
 		return;
 	}
@@ -73,7 +71,7 @@ void EthernetProtocol::OnRxFrame(EthernetFrame* frame)
 	auto& ethertype = frame->InnerEthertype();
 	if(ethertype <= 1500)
 	{
-		printf("Got LLC frame, ignoring...\n");
+		//TODO: process LLC frames
 	}
 	uint16_t plen = frame->GetPayloadLength();
 	switch(ethertype)
@@ -104,8 +102,8 @@ void EthernetProtocol::OnRxFrame(EthernetFrame* frame)
 		case ETHERTYPE_IPV6:
 			break;
 
+		//unrecognized ethertype, ignore
 		default:
-			printf("Got frame with unrecognized Ethertype 0x%04x, ignoring...\n", ethertype);
 			break;
 	}
 

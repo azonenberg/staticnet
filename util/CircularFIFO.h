@@ -157,10 +157,8 @@ public:
 		//Hard case: there's data where we want to go
 		else
 		{
-			//This will take several moves, not sure on details yet...
-			printf("hard rewind not implemented (m_writePtr = %d, m_readPtr = %d, nbytes = %d)\n",
-				m_writePtr, m_readPtr, nbytes);
-			exit(1);
+			while(1)
+			{}
 		}
 
 		//Done

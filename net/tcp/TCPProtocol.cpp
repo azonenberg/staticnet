@@ -150,11 +150,11 @@ void TCPProtocol::OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress)
 }
 
 /**
-	@brief Handles an incoming SYN
+	@brief Handles an incoming RST
  */
 void TCPProtocol::OnRxRST(TCPSegment* /*segment*/, IPv4Address /*sourceAddress*/)
 {
-	printf("TODO: handle RST\n");
+	//printf("TODO: handle RST\n");
 }
 
 /**

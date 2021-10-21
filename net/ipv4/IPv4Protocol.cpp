@@ -116,7 +116,7 @@ IPv4Protocol::AddressType IPv4Protocol::GetAddressType(IPv4Address addr)
 		return ADDR_UNICAST_US;
 	else if(addr == m_config.m_broadcast)
 		return ADDR_BROADCAST;
-	else if(addr == IPv4Address{.m_octets{255, 255, 255, 255}} )
+	else if(addr.m_word == 0xffffffff)
 		return ADDR_BROADCAST;
 	else if((addr.m_octets[0] & 0xf0) == 0xe0)
 		return ADDR_MULTICAST;
@@ -205,7 +205,9 @@ void IPv4Protocol::OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength
 		//TODO: handle UDP traffic
 		case IP_PROTO_UDP:
 			if(type == ADDR_UNICAST_US)
-				printf("got UDP packet TODO\n");
+			{
+				//printf("got UDP packet TODO\n");
+			}
 			break;
 
 		//ignore any unknown protocols

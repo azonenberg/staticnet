@@ -29,103 +29,115 @@
 
 #include <staticnet-config.h>
 #include <staticnet/stack/staticnet.h>
-#include "TapEthernetInterface.h"
+#include <stm32fxxx.h>
+#include "STM32EthernetInterface.h"
 
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <linux/if.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <fcntl.h>
-#include <linux/if_tun.h>
-#include <string.h>
-#include <thread>
-#include <sys/signal.h>
+#include <util/Logger.h>
+extern Logger g_log;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
 
-TapEthernetInterface::TapEthernetInterface(const char* name)
+STM32EthernetInterface::STM32EthernetInterface()
+	: m_nextRxBuffer(0)
 {
-	signal(SIGPIPE, SIG_IGN);
-
-	//Open the tap handle
-	m_hTun = open("/dev/net/tun", O_RDWR | O_NONBLOCK);
-	if(m_hTun < 0)
+	//Initialize DMA ring buffers
+	for(int i=0; i<4; i++)
 	{
-		perror("open tun");
-		abort();
-	}
+		m_rxDmaDescriptors[i].RDES0 = 0x80000000;
+		if(i == 3)
+			m_rxDmaDescriptors[i].RDES1 = 0x00008800;
+		else
+			m_rxDmaDescriptors[i].RDES1 = 0x00000800;
 
-	//Configure and name it
-	ifreq ifr;
-	memset(&ifr, 0, sizeof(ifr));
-	ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-	strncpy(ifr.ifr_name, name, IFNAMSIZ-1);
-	if(ioctl(m_hTun, TUNSETIFF, &ifr) < 0)
-	{
-		close(m_hTun);
-		perror("TUNSETIFF");
-		abort();
+		m_rxDmaDescriptors[i].RDES2 = reinterpret_cast<uint32_t>(m_rxBuffers[i].RawData());
+		m_rxDmaDescriptors[i].RDES3 = 0;
 	}
+	EDMA.DMARDLAR = &m_rxDmaDescriptors[0];
+
+	//Poll demand DMA RX
+	EDMA.DMARPDR = 0;
 }
 
-TapEthernetInterface::~TapEthernetInterface()
+STM32EthernetInterface::~STM32EthernetInterface()
 {
-	close(m_hTun);
+	//nothing here
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Transmit path
 
-EthernetFrame* TapEthernetInterface::GetTxFrame()
+EthernetFrame* STM32EthernetInterface::GetTxFrame()
 {
-	return new EthernetFrame;
+	g_log(Logger::ERROR, "GetTxFrame called\n");
+	while(1)
+	{}
+	//return new EthernetFrame;
+	return NULL;
 }
 
-void TapEthernetInterface::SendTxFrame(EthernetFrame* frame)
+void STM32EthernetInterface::SendTxFrame(EthernetFrame* frame)
 {
+	/*
 	write(m_hTun, frame->RawData(), frame->Length());
 	delete frame;
+	*/
 }
 
-void TapEthernetInterface::CancelTxFrame(EthernetFrame* frame)
+void STM32EthernetInterface::CancelTxFrame(EthernetFrame* frame)
 {
-	delete frame;
+	//delete frame;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Receive path
 
-EthernetFrame* TapEthernetInterface::GetRxFrame()
+EthernetFrame* STM32EthernetInterface::GetRxFrame()
 {
-	EthernetFrame* frame = new EthernetFrame;
-	int len = read(m_hTun,  frame->RawData(), ETHERNET_BUFFER_SIZE);
+	int nbuf = m_nextRxBuffer;
 
-	if(len <= 0)
-	{
-		delete frame;
+	//Check if we have a frame ready to read
+	auto& desc = m_rxDmaDescriptors[nbuf];
+	if( (desc.RDES0 & 0x80000000) != 0)
 		return NULL;
-	}
 
-	else
-	{
-		#ifdef STATICNET_PERFORMANCE_COUNTERS
+	//TODO: desc.RDES0 & 0x2 indicates CRC error
 
-			if(frame->DstMAC().IsUnicast())
-				m_perfCounters.m_rxFramesUnicast ++;
-			else
-				m_perfCounters.m_rxFramesMulticast ++;
-			m_perfCounters.m_rxBytesTotal += len;
+	auto frame = &m_rxBuffers[nbuf];
 
-		#endif
+	//Get the length (trim the CRC)
+	int len = (desc.RDES0 >> 16) & 0x3fff;
+	if(len < 4)
+		return NULL;
+	len -= 4;
+	frame->SetLength(len);
 
-		frame->SetLength(len);
-		return frame;
-	}
+	#ifdef STATICNET_PERFORMANCE_COUNTERS
+
+		if(frame->DstMAC().IsUnicast())
+			m_perfCounters.m_rxFramesUnicast ++;
+		else
+			m_perfCounters.m_rxFramesMulticast ++;
+		m_perfCounters.m_rxBytesTotal += len;
+
+	#endif
+
+	//Bump the buffer index
+	m_nextRxBuffer = (m_nextRxBuffer + 1) % 4;
+
+	//All done
+	return frame;
 }
 
-void TapEthernetInterface::ReleaseRxFrame(EthernetFrame* frame)
+void STM32EthernetInterface::ReleaseRxFrame(EthernetFrame* frame)
 {
-	delete frame;
+	int numBuffer = frame - &m_rxBuffers[0];
+	if(numBuffer >= 4)
+		return;
+
+	//Mark the buffer as free for the DMA to use
+	m_rxDmaDescriptors[numBuffer].RDES0 |= 0x80000000;
+
+	//and tell the DMA to re-poll the descriptor list
+	EDMA.DMARPDR = 0;
 }

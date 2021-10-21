@@ -27,8 +27,6 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-#include <stdio.h>
-
 #include <staticnet-config.h>
 #include <staticnet/stack/staticnet.h>
 
@@ -122,32 +120,4 @@ void ARPProtocol::OnRequestPacket(ARPPacket* packet)
  */
 void ARPProtocol::OnReplyPacket(ARPPacket* /*packet*/)
 {
-		/*
-
-	printf("    Sender hardware: %02x:%02x:%02x:%02x:%02x:%02x\n",
-		packet->m_senderHardwareAddress[0],
-		packet->m_senderHardwareAddress[1],
-		packet->m_senderHardwareAddress[2],
-		packet->m_senderHardwareAddress[3],
-		packet->m_senderHardwareAddress[4],
-		packet->m_senderHardwareAddress[5]);
-	printf("    Sender protocol: %d.%d.%d.%d\n",
-		packet->m_senderProtocolAddress.m_octets[0],
-		packet->m_senderProtocolAddress.m_octets[1],
-		packet->m_senderProtocolAddress.m_octets[2],
-		packet->m_senderProtocolAddress.m_octets[3]);
-
-	printf("    Target hardware: %02x:%02x:%02x:%02x:%02x:%02x\n",
-		packet->m_targetHardwareAddress[0],
-		packet->m_targetHardwareAddress[1],
-		packet->m_targetHardwareAddress[2],
-		packet->m_targetHardwareAddress[3],
-		packet->m_targetHardwareAddress[4],
-		packet->m_targetHardwareAddress[5]);
-	printf("    Target protocol: %d.%d.%d.%d\n",
-		packet->m_targetProtocolAddress.m_octets[0],
-		packet->m_targetProtocolAddress.m_octets[1],
-		packet->m_targetProtocolAddress.m_octets[2],
-		packet->m_targetProtocolAddress.m_octets[3]);
-	*/
 }

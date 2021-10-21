@@ -27,105 +27,46 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-#include <staticnet-config.h>
-#include <staticnet/stack/staticnet.h>
-#include "TapEthernetInterface.h"
+/**
+	@file
+	@brief Declaration of STM32EthernetInterface
+ */
 
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <linux/if.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <fcntl.h>
-#include <linux/if_tun.h>
-#include <string.h>
-#include <thread>
-#include <sys/signal.h>
+#ifndef STM32EthernetInterface_h
+#define STM32EthernetInterface_h
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Construction / destruction
+#include <stm32fxxx.h>
+#include "../base/EthernetInterface.h"
 
-TapEthernetInterface::TapEthernetInterface(const char* name)
+/**
+	@brief Ethernet driver using the STM32 Ethernet MAC
+ */
+class STM32EthernetInterface : public EthernetInterface
 {
-	signal(SIGPIPE, SIG_IGN);
+public:
+	STM32EthernetInterface();
+	virtual ~STM32EthernetInterface();
 
-	//Open the tap handle
-	m_hTun = open("/dev/net/tun", O_RDWR | O_NONBLOCK);
-	if(m_hTun < 0)
-	{
-		perror("open tun");
-		abort();
-	}
+	virtual EthernetFrame* GetTxFrame();
+	virtual void SendTxFrame(EthernetFrame* frame);
+	virtual void CancelTxFrame(EthernetFrame* frame);
+	virtual EthernetFrame* GetRxFrame();
+	virtual void ReleaseRxFrame(EthernetFrame* frame);
 
-	//Configure and name it
-	ifreq ifr;
-	memset(&ifr, 0, sizeof(ifr));
-	ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-	strncpy(ifr.ifr_name, name, IFNAMSIZ-1);
-	if(ioctl(m_hTun, TUNSETIFF, &ifr) < 0)
-	{
-		close(m_hTun);
-		perror("TUNSETIFF");
-		abort();
-	}
-}
+protected:
 
-TapEthernetInterface::~TapEthernetInterface()
-{
-	close(m_hTun);
-}
+	///@brief RX DMA descriptors
+	volatile edma_rx_descriptor_t m_rxDmaDescriptors[4];
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Transmit path
+	/**
+		@brief RX DMA buffers
 
-EthernetFrame* TapEthernetInterface::GetTxFrame()
-{
-	return new EthernetFrame;
-}
+		TODO: support having >4 buffers, so we can have some being processed by the app while others are being DMA'd?
+	 */
+	EthernetFrame m_rxBuffers[4];
 
-void TapEthernetInterface::SendTxFrame(EthernetFrame* frame)
-{
-	write(m_hTun, frame->RawData(), frame->Length());
-	delete frame;
-}
+	///@brief Index of the next DMA buffer to read from
+	int m_nextRxBuffer;
+};
 
-void TapEthernetInterface::CancelTxFrame(EthernetFrame* frame)
-{
-	delete frame;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Receive path
-
-EthernetFrame* TapEthernetInterface::GetRxFrame()
-{
-	EthernetFrame* frame = new EthernetFrame;
-	int len = read(m_hTun,  frame->RawData(), ETHERNET_BUFFER_SIZE);
-
-	if(len <= 0)
-	{
-		delete frame;
-		return NULL;
-	}
-
-	else
-	{
-		#ifdef STATICNET_PERFORMANCE_COUNTERS
-
-			if(frame->DstMAC().IsUnicast())
-				m_perfCounters.m_rxFramesUnicast ++;
-			else
-				m_perfCounters.m_rxFramesMulticast ++;
-			m_perfCounters.m_rxBytesTotal += len;
-
-		#endif
-
-		frame->SetLength(len);
-		return frame;
-	}
-}
-
-void TapEthernetInterface::ReleaseRxFrame(EthernetFrame* frame)
-{
-	delete frame;
-}
+#endif

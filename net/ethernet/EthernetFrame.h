@@ -173,12 +173,12 @@ public:
 	}
 
 	///@brief Gets the length of the frame, including headers but not preamble or FCS
-	uint16_t& Length()
-	{ return *(&m_length); }
+	void SetLength(uint16_t length)
+	{ m_length = length; }
 
 	///@brief Gets the length of the frame, including headers but not preamble or FCS
-	const uint16_t& Length() const
-	{ return *(&m_length); }
+	uint16_t Length() const
+	{ return m_length; }
 
 	///@brief Gets a pointer to the raw frame contents
 	const uint8_t* RawData() const
