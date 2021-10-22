@@ -30,6 +30,7 @@
 #include <staticnet-config.h>
 #include <staticnet/stack/staticnet.h>
 #include <stm32fxxx.h>
+#include <peripheral/RCC.h>
 #include "STM32EthernetInterface.h"
 
 #include <util/Logger.h>
@@ -40,23 +41,55 @@ extern Logger g_log;
 
 STM32EthernetInterface::STM32EthernetInterface()
 	: m_nextRxBuffer(0)
+	, m_nextTxDescriptorWrite(0)
+	, m_nextTxDescriptorDone(0)
 {
-	//Initialize DMA ring buffers
+	RCCHelper::Enable(&EMAC);
+
+	//Wait for DMA reset to finish
+	while((EDMA.DMABMR & 1) == 1)
+	{}
+	EMAC.MMCCR = 1;
+
+	//Receive all frames. promiscuous mode
+	EMAC.MACFFR = 0x80000001;
+
+	//Initialize DMA RX ring buffers
 	for(int i=0; i<4; i++)
 	{
 		m_rxDmaDescriptors[i].RDES0 = 0x80000000;
 		if(i == 3)
-			m_rxDmaDescriptors[i].RDES1 = 0x00008800;
+			m_rxDmaDescriptors[i].RDES1 = 0x00008000 | ETHERNET_BUFFER_SIZE;
 		else
-			m_rxDmaDescriptors[i].RDES1 = 0x00000800;
+			m_rxDmaDescriptors[i].RDES1 = 0x00000000 | ETHERNET_BUFFER_SIZE;
 
-		m_rxDmaDescriptors[i].RDES2 = reinterpret_cast<uint32_t>(m_rxBuffers[i].RawData());
-		m_rxDmaDescriptors[i].RDES3 = 0;
+		m_rxDmaDescriptors[i].RDES2 = m_rxBuffers[i].RawData();
+		m_rxDmaDescriptors[i].RDES3 = nullptr;
 	}
 	EDMA.DMARDLAR = &m_rxDmaDescriptors[0];
 
+	//Initialize DMA TX ring buffers (all zero)
+	for(int i=0; i<4; i++)
+	{
+		m_txDmaDescriptors[i].TDES0 = 0x00000000;
+		m_txDmaDescriptors[i].TDES1 = 0x00000000;
+		m_txDmaDescriptors[i].TDES2 = 0x00000000;
+		m_txDmaDescriptors[i].TDES3 = 0x00000000;
+	}
+	EDMA.DMATDLAR = &m_txDmaDescriptors[0];
+
+	//Set up free list for transmit frame buffers
+	for(int i=0; i<TX_BUFFER_FRAMES; i++)
+		m_txFreeList.Push(&m_txBuffers[i]);
+
 	//Poll demand DMA RX
 	EDMA.DMARPDR = 0;
+
+	//Select mode: 100/full, RX enabled, TX enabled, no carrier sense
+	EMAC.MACCR = 0x1c80c;
+
+	//Enable actual DMA in DMAOMR bits 1/13
+	EDMA.DMAOMR |= 0x2002;
 }
 
 STM32EthernetInterface::~STM32EthernetInterface()
@@ -69,24 +102,87 @@ STM32EthernetInterface::~STM32EthernetInterface()
 
 EthernetFrame* STM32EthernetInterface::GetTxFrame()
 {
-	g_log(Logger::ERROR, "GetTxFrame called\n");
-	while(1)
+	//Check if any of the currently pending transmit frames have completed, and return them to the free list if so
+	while(CheckForFinishedFrames())
 	{}
-	//return new EthernetFrame;
-	return NULL;
+
+	//Return the next buffer in the free list, or null if nothing is there
+	if(m_txFreeList.IsEmpty())
+	{
+		g_log("GetTxFrame::No free frame buffers\n");
+		return NULL;
+	}
+
+	auto frame = m_txFreeList.Pop();
+	return frame;
+}
+
+/**
+	@brief Check if any frames in the DMA are done, return true if yes
+ */
+bool STM32EthernetInterface::CheckForFinishedFrames()
+{
+	if(
+		( (m_txDmaDescriptors[m_nextTxDescriptorDone].TDES0 & 0x80000000) == 0)	&&	//buffer owned by us
+		  (m_txDmaDescriptors[m_nextTxDescriptorDone].TDES2 != 0)					//valid buffer pointer
+		)
+	{
+		g_log("CheckForFinishedFrames: m_nextTxDescriptorDone = %d, free\n", m_nextTxDescriptorDone);
+
+		//EthernetFrame has 2 bytes of length before the buffer
+		m_txFreeList.Push(reinterpret_cast<EthernetFrame*>(m_txDmaDescriptors[m_nextTxDescriptorDone].TDES2 - 2));
+
+		m_txDmaDescriptors[m_nextTxDescriptorDone].TDES2 = 0;
+
+		//go on to next descriptor in the ring
+		m_nextTxDescriptorDone = (m_nextTxDescriptorDone + 1) % 4;
+
+		return true;
+	}
+
+	return false;
 }
 
 void STM32EthernetInterface::SendTxFrame(EthernetFrame* frame)
 {
-	/*
-	write(m_hTun, frame->RawData(), frame->Length());
-	delete frame;
-	*/
+	g_log("SendTxFrame (m_nextTxDescriptorWrite = %d, frame=%08x, len=%d)\n", m_nextTxDescriptorWrite, frame, frame->Length());
+
+	//If the descriptor is still busy, block until one frees up
+	//TODO: save the frame somewhere
+	auto& desc = m_txDmaDescriptors[m_nextTxDescriptorWrite];
+	if(desc.TDES0 & 0x80000000)
+	{
+		g_log("SendTxFrame: no free DMA descriptors, blocking\n");
+		while(!CheckForFinishedFrames())
+		{}
+	}
+	g_log("SendTxFrame: all good\n");
+
+	//Write the descriptor
+	desc.TDES0 = 0xb0000000;
+	if(m_nextTxDescriptorWrite == 3)
+		desc.TDES0 |= 0x00200000;
+	desc.TDES1 = frame->Length();
+	desc.TDES2 = frame->RawData();
+	desc.TDES3 = nullptr;
+
+	//Set the own bit
+	desc.TDES0 |= 0x80000000;
+
+	//Poll descriptor and start DMA again
+	EDMA.DMATPDR = 0;
+	EDMA.DMAOMR |= 0x2000;
+
+	//Move on to next descriptor
+	m_nextTxDescriptorWrite = (m_nextTxDescriptorWrite + 1) % 4;
+
+	//Don't put on free list until DMA is done
 }
 
 void STM32EthernetInterface::CancelTxFrame(EthernetFrame* frame)
 {
-	//delete frame;
+	//Return it to the free list
+	m_txFreeList.Push(frame);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

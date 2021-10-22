@@ -36,6 +36,7 @@
 #define STM32EthernetInterface_h
 
 #include <stm32fxxx.h>
+#include <util/FIFO.h>
 #include "../base/EthernetInterface.h"
 
 /**
@@ -54,9 +55,13 @@ public:
 	virtual void ReleaseRxFrame(EthernetFrame* frame);
 
 protected:
+	bool CheckForFinishedFrames();
 
 	///@brief RX DMA descriptors
 	volatile edma_rx_descriptor_t m_rxDmaDescriptors[4];
+
+	///@brief TX DMA descriptors
+	volatile edma_tx_descriptor_t m_txDmaDescriptors[4];
 
 	/**
 		@brief RX DMA buffers
@@ -67,6 +72,20 @@ protected:
 
 	///@brief Index of the next DMA buffer to read from
 	int m_nextRxBuffer;
+
+	///@brief Index of the next DMA descriptor to write to
+	int m_nextTxDescriptorWrite;
+
+	///@brief Index of the next DMA descriptor to check for completion
+	int m_nextTxDescriptorDone;
+
+	///@brief TX buffers for DMA etc
+	EthernetFrame m_txBuffers[TX_BUFFER_FRAMES];
+
+	//TODO: pending buffers on hold in case retransmit is needed? need to record they're not free
+
+	///@brief FIFO of free TX buffers
+	FIFO<EthernetFrame*, TX_BUFFER_FRAMES> m_txFreeList;
 };
 
 #endif
