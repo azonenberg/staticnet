@@ -31,6 +31,9 @@
 #include "../stack/staticnet.h"
 #include "CryptoEngine.h"
 
+uint8_t CryptoEngine::m_hostkeyPriv[32];
+uint8_t CryptoEngine::m_hostkeyPub[32];
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
 

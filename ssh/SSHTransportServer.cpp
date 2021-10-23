@@ -670,7 +670,8 @@ void SSHTransportServer::OnRxEncryptedPacket(int id, TCPTableEntry* socket)
 			break;
 
 		default:
-			printf("Got unexpected packet (type %d)\n", pack->m_type);
+			//printf("Got unexpected packet (type %d)\n", pack->m_type);
+			break;
 	}
 }
 
@@ -716,7 +717,9 @@ void SSHTransportServer::OnRxServiceRequest(int id, TCPTableEntry* socket, SSHTr
 
 	//Authenticated
 	else
-		printf("Got SSH_MSG_SERVICE_REQUEST (%s)\n", payload);
+	{
+		//printf("Got SSH_MSG_SERVICE_REQUEST (%s)\n", payload);
+	}
 }
 
 /**
@@ -806,7 +809,7 @@ void SSHTransportServer::OnRxUserAuthRequest(int id, TCPTableEntry* socket, SSHT
 		if(authlen > 31)
 			authlen = 31;
 		memcpy(tmp_type, authtype, authlen);
-		printf("SSH_MSG_USERAUTH_REQUEST of type %s\n", tmp_type);
+		//printf("SSH_MSG_USERAUTH_REQUEST of type %s\n", tmp_type);
 	}
 }
 
@@ -875,7 +878,7 @@ void SSHTransportServer::OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSH
 	//If we don't have an authenticator, reject the auth request
 	if(!m_passwordAuth)
 	{
-		printf("rejecting auth due to no password authenticator\n");
+		//printf("rejecting auth due to no password authenticator\n");
 		OnRxAuthFail(id, socket);
 		//no change to state, still waiting for auth to complete
 		return;
@@ -889,7 +892,7 @@ void SSHTransportServer::OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSH
 		passlen,
 		m_state[id].m_crypto))
 	{
-		printf("authenticator reported bad password\n");
+		//printf("authenticator reported bad password\n");
 		OnRxAuthFail(id, socket);
 		//no change to state, still waiting for auth to complete
 		return;

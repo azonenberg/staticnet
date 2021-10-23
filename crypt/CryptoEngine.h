@@ -58,6 +58,12 @@ public:
 	///@brief Generate cryptographic randomness
 	virtual void GenerateRandom(uint8_t* buf, size_t len) =0;
 
+	static void SetHostKey(const uint8_t* pub, const uint8_t* priv)
+	{
+		memcpy(m_hostkeyPriv, priv, ECDH_KEY_SIZE);
+		memcpy(m_hostkeyPub, pub, ECDH_KEY_SIZE);
+	}
+
 	virtual void Clear();
 
 	/**
