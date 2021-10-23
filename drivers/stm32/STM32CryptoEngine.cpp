@@ -26,103 +26,92 @@
 * POSSIBILITY OF SUCH DAMAGE.                                                                                          *
 *                                                                                                                      *
 ***********************************************************************************************************************/
-#include <staticnet-config.h>
-#include <staticnet/stack/staticnet.h>
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Construction / destruction
+#include "STM32CryptoEngine.h"
+#include <peripheral/RCC.h>
 
-/**
-	@brief Initializes the Ethernet protocol stack
- */
-EthernetProtocol::EthernetProtocol(EthernetInterface& iface, MACAddress our_mac)
-	: m_iface(iface)
-	, m_mac(our_mac)
-	, m_arp(nullptr)
-	, m_ipv4(nullptr)
+#include <util/Logger.h>
+extern Logger g_log;
+
+STM32CryptoEngine::STM32CryptoEngine()
 {
+	//Start RNG clocks
+	RCCHelper::Enable(&RNG);
 
+	//Enable clock error detection
+	RNG.CR |= RNG_CED;
+
+	//Turn on the RNG
+	RNG.CR |= RNG_EN;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Incoming frame processing
-
-void EthernetProtocol::OnRxFrame(EthernetFrame* frame)
+STM32CryptoEngine::~STM32CryptoEngine()
 {
-	//Discard anything that's not a broadcast or sent to us
-	//TODO: promiscuous mode
-	auto& dst = frame->DstMAC();
-	if( (dst != m_mac) && !dst.IsMulticast())
-	{
-		m_iface.ReleaseRxFrame(frame);
-		return;
-	}
-
-	//Byte swap header fields
-	frame->ByteSwap();
-
-	//TODO: VLAN processing
-	//For now, ignore VLAN tags
-
-	//Send to appropriate upper layer stack
-	auto& ethertype = frame->InnerEthertype();
-	if(ethertype <= 1500)
-	{
-		//TODO: process LLC frames
-	}
-	uint16_t plen = frame->GetPayloadLength();
-	switch(ethertype)
-	{
-		//Process ARP frames if we have an attached ARP stack and the frame is big enough to hold a full ARP packet
-		case ETHERTYPE_ARP:
-			if(m_arp && (plen >= sizeof(ARPPacket)) )
-				m_arp->OnRxPacket(reinterpret_cast<ARPPacket*>(frame->Payload()));
-			break;
-
-		//Process IPv4 frames if we have an attached IPv4 stack.
-		//Don't bother checking length, upper layer can do that
-		case ETHERTYPE_IPV4:
-			if(m_ipv4)
-			{
-				//Insert this (IP, MAC) into the ARP cache
-				//TODO: wait until upper layer checksum is validated?
-				auto packet = reinterpret_cast<IPv4Packet*>(frame->Payload());
-				if(m_arp)
-					m_arp->Insert(frame->SrcMAC(), packet->m_sourceAddress);
-
-				//then process it
-				m_ipv4->OnRxPacket(packet, plen);
-			}
-			break;
-
-		//TODO: IPv6
-		case ETHERTYPE_IPV6:
-			break;
-
-		//unrecognized ethertype, ignore
-		default:
-			break;
-	}
-
-	m_iface.ReleaseRxFrame(frame);
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Outbound frame path
-
-/**
-	@brief Sets up a new frame
- */
-EthernetFrame* EthernetProtocol::GetTxFrame(ethertype_t type, const MACAddress& dest)
+void STM32CryptoEngine::GenerateRandom(uint8_t* buf, size_t len)
 {
-	//Allocate a new frame from the transmit driver
-	auto frame = m_iface.GetTxFrame();
+	for(size_t i=0; i<len; i+=4)
+	{
+		//Block if RNG is in error state
+		while( (RNG.SR & (RNG_SECS | RNG_CECS)) != 0)
+		{}
 
-	//Fill in header fields (no VLAN tag support for now)
-	frame->DstMAC() = dest;
-	frame->SrcMAC() = m_mac;
-	frame->OuterEthertype() = type;
+		//Block until data is ready to read
+		while( (RNG.SR & RNG_DRDY) == 0)
+		{}
 
-	//Done
-	return frame;
+		//Get the current data word
+		uint32_t data = RNG.DR;
+
+		//Copy data word to output buffer
+		for(size_t j=0; j<4; j++)
+		{
+			if(i+j >= len)
+				break;
+
+			buf[i+j] = (data & 0xff);
+			data >>= 8;
+		}
+	}
+}
+
+void STM32CryptoEngine::Clear()
+{
+	CryptoEngine::Clear();
+}
+
+void STM32CryptoEngine::SHA256_Init()
+{
+	g_log("STM32CryptoEngine::SHA256_Init\n");
+	while(1)
+	{}
+}
+
+void STM32CryptoEngine::SHA256_Update(uint8_t* data, uint16_t len)
+{
+	g_log("STM32CryptoEngine::SHA256_Update\n");
+	while(1)
+	{}
+}
+
+void STM32CryptoEngine::SHA256_Final(uint8_t* digest)
+{
+	g_log("STM32CryptoEngine::SHA256_Final\n");
+	while(1)
+	{}
+}
+
+bool STM32CryptoEngine::DecryptAndVerify(uint8_t* data, uint16_t len)
+{
+	g_log("STM32CryptoEngine::DecryptAndVerify\n");
+	while(1)
+	{}
+}
+
+void STM32CryptoEngine::EncryptAndMAC(uint8_t* data, uint16_t len)
+{
+	g_log("STM32CryptoEngine::EncryptAndMAC\n");
+	while(1)
+	{}
 }

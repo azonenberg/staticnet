@@ -33,9 +33,6 @@
 #include <peripheral/RCC.h>
 #include "STM32EthernetInterface.h"
 
-#include <util/Logger.h>
-extern Logger g_log;
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
 
@@ -108,10 +105,7 @@ EthernetFrame* STM32EthernetInterface::GetTxFrame()
 
 	//Return the next buffer in the free list, or null if nothing is there
 	if(m_txFreeList.IsEmpty())
-	{
-		g_log("GetTxFrame::No free frame buffers\n");
 		return NULL;
-	}
 
 	auto frame = m_txFreeList.Pop();
 	return frame;
@@ -127,8 +121,6 @@ bool STM32EthernetInterface::CheckForFinishedFrames()
 		  (m_txDmaDescriptors[m_nextTxDescriptorDone].TDES2 != 0)					//valid buffer pointer
 		)
 	{
-		g_log("CheckForFinishedFrames: m_nextTxDescriptorDone = %d, free\n", m_nextTxDescriptorDone);
-
 		//EthernetFrame has 2 bytes of length before the buffer
 		m_txFreeList.Push(reinterpret_cast<EthernetFrame*>(m_txDmaDescriptors[m_nextTxDescriptorDone].TDES2 - 2));
 
@@ -145,18 +137,14 @@ bool STM32EthernetInterface::CheckForFinishedFrames()
 
 void STM32EthernetInterface::SendTxFrame(EthernetFrame* frame)
 {
-	g_log("SendTxFrame (m_nextTxDescriptorWrite = %d, frame=%08x, len=%d)\n", m_nextTxDescriptorWrite, frame, frame->Length());
-
 	//If the descriptor is still busy, block until one frees up
 	//TODO: save the frame somewhere
 	auto& desc = m_txDmaDescriptors[m_nextTxDescriptorWrite];
 	if(desc.TDES0 & 0x80000000)
 	{
-		g_log("SendTxFrame: no free DMA descriptors, blocking\n");
 		while(!CheckForFinishedFrames())
 		{}
 	}
-	g_log("SendTxFrame: all good\n");
 
 	//Write the descriptor
 	desc.TDES0 = 0xb0000000;

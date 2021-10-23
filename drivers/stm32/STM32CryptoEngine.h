@@ -26,103 +26,31 @@
 * POSSIBILITY OF SUCH DAMAGE.                                                                                          *
 *                                                                                                                      *
 ***********************************************************************************************************************/
-#include <staticnet-config.h>
-#include <staticnet/stack/staticnet.h>
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Construction / destruction
+#ifndef STM32CryptoEngine_h
+#define STM32CryptoEngine_h
 
-/**
-	@brief Initializes the Ethernet protocol stack
- */
-EthernetProtocol::EthernetProtocol(EthernetInterface& iface, MACAddress our_mac)
-	: m_iface(iface)
-	, m_mac(our_mac)
-	, m_arp(nullptr)
-	, m_ipv4(nullptr)
-{
-
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Incoming frame processing
-
-void EthernetProtocol::OnRxFrame(EthernetFrame* frame)
-{
-	//Discard anything that's not a broadcast or sent to us
-	//TODO: promiscuous mode
-	auto& dst = frame->DstMAC();
-	if( (dst != m_mac) && !dst.IsMulticast())
-	{
-		m_iface.ReleaseRxFrame(frame);
-		return;
-	}
-
-	//Byte swap header fields
-	frame->ByteSwap();
-
-	//TODO: VLAN processing
-	//For now, ignore VLAN tags
-
-	//Send to appropriate upper layer stack
-	auto& ethertype = frame->InnerEthertype();
-	if(ethertype <= 1500)
-	{
-		//TODO: process LLC frames
-	}
-	uint16_t plen = frame->GetPayloadLength();
-	switch(ethertype)
-	{
-		//Process ARP frames if we have an attached ARP stack and the frame is big enough to hold a full ARP packet
-		case ETHERTYPE_ARP:
-			if(m_arp && (plen >= sizeof(ARPPacket)) )
-				m_arp->OnRxPacket(reinterpret_cast<ARPPacket*>(frame->Payload()));
-			break;
-
-		//Process IPv4 frames if we have an attached IPv4 stack.
-		//Don't bother checking length, upper layer can do that
-		case ETHERTYPE_IPV4:
-			if(m_ipv4)
-			{
-				//Insert this (IP, MAC) into the ARP cache
-				//TODO: wait until upper layer checksum is validated?
-				auto packet = reinterpret_cast<IPv4Packet*>(frame->Payload());
-				if(m_arp)
-					m_arp->Insert(frame->SrcMAC(), packet->m_sourceAddress);
-
-				//then process it
-				m_ipv4->OnRxPacket(packet, plen);
-			}
-			break;
-
-		//TODO: IPv6
-		case ETHERTYPE_IPV6:
-			break;
-
-		//unrecognized ethertype, ignore
-		default:
-			break;
-	}
-
-	m_iface.ReleaseRxFrame(frame);
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Outbound frame path
+#include <stdint.h>
+#include <string.h>
+#include <stm32fxxx.h>
+#include "../../crypt/CryptoEngine.h"
 
 /**
-	@brief Sets up a new frame
+	@brief Driver for the STM32 hardware AES / SHA256 / RNG blocks
  */
-EthernetFrame* EthernetProtocol::GetTxFrame(ethertype_t type, const MACAddress& dest)
+class STM32CryptoEngine : public CryptoEngine
 {
-	//Allocate a new frame from the transmit driver
-	auto frame = m_iface.GetTxFrame();
+public:
+	STM32CryptoEngine();
+	virtual ~STM32CryptoEngine();
 
-	//Fill in header fields (no VLAN tag support for now)
-	frame->DstMAC() = dest;
-	frame->SrcMAC() = m_mac;
-	frame->OuterEthertype() = type;
+	virtual void GenerateRandom(uint8_t* buf, size_t len);
+	virtual void Clear();
+	virtual void SHA256_Init();
+	virtual void SHA256_Update(uint8_t* data, uint16_t len);
+	virtual void SHA256_Final(uint8_t* digest);
+	virtual bool DecryptAndVerify(uint8_t* data, uint16_t len);
+	virtual void EncryptAndMAC(uint8_t* data, uint16_t len);
+};
 
-	//Done
-	return frame;
-}
+#endif
