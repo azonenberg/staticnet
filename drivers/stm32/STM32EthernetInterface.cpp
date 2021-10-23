@@ -33,6 +33,9 @@
 #include <peripheral/RCC.h>
 #include "STM32EthernetInterface.h"
 
+#include <util/Logger.h>
+extern Logger g_log;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
 
@@ -116,6 +119,23 @@ EthernetFrame* STM32EthernetInterface::GetTxFrame()
  */
 bool STM32EthernetInterface::CheckForFinishedFrames()
 {
+	//Check errors
+	if(EDMA.DMASR & DMA_FATAL_BUS_ERROR)
+	{
+		g_log(Logger::ERROR, "Fatal bus error on Ethernet DMA\n");
+		LogIndenter li(g_log);
+		if(EDMA.DMASR & DMA_ERROR_TXDMA)
+			g_log("TX DMA access error\n");
+		if(EDMA.DMASR & DMA_ERROR_RXDMA)
+			g_log("RX DMA access error\n");
+		if(EDMA.DMASR & DMA_ERROR_DESCRIPTOR)
+			g_log("Descriptor access error\n");
+
+		while(1)
+		{}
+	}
+
+
 	if(
 		( (m_txDmaDescriptors[m_nextTxDescriptorDone].TDES0 & 0x80000000) == 0)	&&	//buffer owned by us
 		  (m_txDmaDescriptors[m_nextTxDescriptorDone].TDES2 != 0)					//valid buffer pointer
@@ -147,15 +167,15 @@ void STM32EthernetInterface::SendTxFrame(EthernetFrame* frame)
 	}
 
 	//Write the descriptor
-	desc.TDES0 = 0xb0000000;
-	if(m_nextTxDescriptorWrite == 3)
-		desc.TDES0 |= 0x00200000;
 	desc.TDES1 = frame->Length();
 	desc.TDES2 = frame->RawData();
 	desc.TDES3 = nullptr;
 
-	//Set the own bit
-	desc.TDES0 |= 0x80000000;
+	//must do this at the end since setting the own bit can trigger the transmit
+	if(m_nextTxDescriptorWrite == 3)
+		desc.TDES0 = 0xb0200000;
+	else
+		desc.TDES0 = 0xb0000000;
 
 	//Poll descriptor and start DMA again
 	EDMA.DMATPDR = 0;
