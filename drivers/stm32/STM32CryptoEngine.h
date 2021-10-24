@@ -37,6 +37,10 @@
 
 /**
 	@brief Driver for the STM32 hardware AES / SHA256 / RNG blocks
+
+	NOT thread safe.
+
+	Includes context switching logic to manage multiple concurrent crypto operations.
  */
 class STM32CryptoEngine : public CryptoEngine
 {
@@ -47,10 +51,25 @@ public:
 	virtual void GenerateRandom(uint8_t* buf, size_t len);
 	virtual void Clear();
 	virtual void SHA256_Init();
-	virtual void SHA256_Update(uint8_t* data, uint16_t len);
+	virtual void SHA256_Update(const uint8_t* data, uint16_t len);
 	virtual void SHA256_Final(uint8_t* digest);
 	virtual bool DecryptAndVerify(uint8_t* data, uint16_t len);
 	virtual void EncryptAndMAC(uint8_t* data, uint16_t len);
+
+protected:
+
+	///@brief The object currently doing a hash (if any)
+	static STM32CryptoEngine* m_activeHashEngine;
+
+	void HashContextSwitchOut();
+	void HashContextSwitchIn();
+
+	//Saved context for hash engine
+	uint32_t m_savedHashContext[54];
+
+	//Saved partial hash data
+	uint32_t m_partialHashInput;
+	uint32_t m_partialHashLength;
 };
 
 #endif

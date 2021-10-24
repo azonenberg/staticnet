@@ -111,7 +111,7 @@ public:
 	virtual void SHA256_Init() =0;
 
 	///@brief Hashes data
-	virtual void SHA256_Update(uint8_t* data, uint16_t len) =0;
+	virtual void SHA256_Update(const uint8_t* data, uint16_t len) =0;
 
 	///@brief Finishes a hash operation
 	virtual void SHA256_Final(uint8_t* digest) =0;
