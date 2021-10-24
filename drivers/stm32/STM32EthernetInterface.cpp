@@ -34,7 +34,9 @@
 #include "STM32EthernetInterface.h"
 
 #include <util/Logger.h>
+#include <peripheral/UART.h>
 extern Logger g_log;
+extern UART* g_cliUART;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
@@ -185,6 +187,15 @@ void STM32EthernetInterface::SendTxFrame(EthernetFrame* frame)
 	m_nextTxDescriptorWrite = (m_nextTxDescriptorWrite + 1) % 4;
 
 	//Don't put on free list until DMA is done
+	g_log("STM32EthernetInterface::SendTxFrame: len=%d\n", frame->Length());
+	for(int i=0; i<frame->Length(); i++)
+	{
+		g_cliUART->Printf("%02x ", frame->RawData()[i]);
+		if( (i & 63) == 63)
+			g_cliUART->Printf("\n");
+	}
+	g_cliUART->Printf("\n");
+
 }
 
 void STM32EthernetInterface::CancelTxFrame(EthernetFrame* frame)

@@ -27,8 +27,6 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-#include <stdio.h>
-
 #include <staticnet-config.h>
 #include <staticnet/stack/staticnet.h>
 
@@ -223,9 +221,9 @@ void TCPProtocol::SendSegment(TCPSegment* segment, IPv4Packet* packet, uint16_t 
 
 	//Need to be in network byte order before we send
 	segment->ByteSwap();
-
 	segment->m_checksum = ~__builtin_bswap16(
 		IPv4Protocol::InternetChecksum(reinterpret_cast<uint8_t*>(segment), length, pseudoHeaderChecksum));
+
 	m_ipv4->SendTxPacket(packet, length);
 }
 
@@ -248,6 +246,7 @@ IPv4Packet* TCPProtocol::CreateReply(TCPTableEntry* state)
 	payload->m_offsetAndFlags = (5 << 12) | TCPSegment::FLAG_ACK;
 	payload->m_windowSize = TCP_IPV4_PAYLOAD_MTU;	//TODO: support variable window size
 	payload->m_urgent = 0;
+	payload->m_checksum = 0;
 
 	return reply;
 }

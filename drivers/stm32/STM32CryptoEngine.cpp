@@ -109,8 +109,6 @@ void STM32CryptoEngine::GenerateRandom(uint8_t* buf, size_t len)
  */
 void STM32CryptoEngine::HashContextSwitchOut()
 {
-	g_log("STM32CryptoEngine::HashContextSwitchOut (%08x)\n", this);
-
 	for(int i=0; i<54; i++)
 		m_savedHashContext[i] = HASH.CSR[i];
 
@@ -122,8 +120,6 @@ void STM32CryptoEngine::HashContextSwitchOut()
  */
 void STM32CryptoEngine::HashContextSwitchIn()
 {
-	g_log("STM32CryptoEngine::HashContextSwitchIn (%08x)\n", this);
-
 	for(int i=0; i<54; i++)
 		HASH.CSR[i] = m_savedHashContext[i];
 
@@ -132,9 +128,6 @@ void STM32CryptoEngine::HashContextSwitchIn()
 
 void STM32CryptoEngine::SHA256_Init()
 {
-	g_log("STM32CryptoEngine::SHA256_Init\n");
-	LogIndenter li(g_log);
-
 	//We have no context to restore
 	//but if somebody ELSE has a hash in progress, we might need to swap them out.
 	if( (m_activeHashEngine != NULL) && (m_activeHashEngine != this) )
@@ -147,9 +140,6 @@ void STM32CryptoEngine::SHA256_Init()
 
 void STM32CryptoEngine::SHA256_Update(const uint8_t* data, uint16_t len)
 {
-	g_log("STM32CryptoEngine::SHA256_Update\n");
-	LogIndenter li(g_log);
-
 	//If we're not active, swap us in
 	if(m_activeHashEngine != this)
 	{
@@ -158,24 +148,43 @@ void STM32CryptoEngine::SHA256_Update(const uint8_t* data, uint16_t len)
 		HashContextSwitchIn();
 	}
 
-	//TODO: handle input not a multiple of 4 bytes
-	if(len % 4)
+	//If we have partial input, but not enough to make a whole word when combined, just save it
+	if( (m_partialHashLength + len) < 4)
 	{
-		g_log(Logger::ERROR, "Non multiple of 4 not supported\n");
-		while(1)
-		{}
+		for(int i=0; i<len; i++)
+			m_partialHashInput = (m_partialHashInput >> 8) | (data[i] << 24);
+		m_partialHashLength += len;
+		return;
 	}
 
-	//Process the input in blocks of 4 bytes
-	for(uint16_t i=0; i<len; i += 4)
+	//If we have partial data, but enough to make a whole word when combined, combine and push the first word
+	else if(m_partialHashLength != 0)
 	{
-		//Block if busy
-		while(HASH.SR & HASH_BUSY)
-		{}
+		//Combine the old and new data
+		int nExtra = 4 - m_partialHashLength;
+		for(int i=0; i<nExtra; i++)
+			m_partialHashInput = (m_partialHashInput >> 8) | (data[i] << 24);
 
-		//Write the next input word
+		//Write the combined word
+		HASH.DIN = m_partialHashInput;
+
+		//Record how much data we consumed
+		data += nExtra;
+		len -= nExtra;
+
+		//Partial data is now flushed
+		m_partialHashLength = 0;
+	}
+
+	//Hash all full words
+	int nlast = len - (len % 4);
+	for(uint16_t i=0; i<nlast; i += 4)
 		HASH.DIN = *reinterpret_cast<const uint32_t*>(data + i);
-	}
+
+	//Save any remaining data
+	for(int i=nlast; i<len; i++)
+		m_partialHashInput = (m_partialHashInput >> 8) | (data[i] << 24);
+	m_partialHashLength = len % 4;
 }
 
 void STM32CryptoEngine::SHA256_Final(uint8_t* digest)
@@ -188,16 +197,20 @@ void STM32CryptoEngine::SHA256_Final(uint8_t* digest)
 		HashContextSwitchIn();
 	}
 
-	g_log("STM32CryptoEngine::SHA256_Final\n");
-	LogIndenter li(g_log);
-
 	//Block if busy
 	while(HASH.SR & HASH_BUSY)
 	{}
 
+	//If we have partial data, shift it so it's right justified, then push it
+	if(m_partialHashLength != 0)
+		m_partialHashInput >>= 8 * (4 - m_partialHashLength);
+	HASH.DIN = m_partialHashInput;
+
 	//Start the last hash block
-	//TODO: handle partial input
-	HASH.STR = 0x00;
+	if(m_partialHashLength != 0)
+		HASH.STR = 8 * m_partialHashLength;
+	else
+		HASH.STR = 0x00;
 	HASH.STR = 0x100;
 
 	//Copy output (core automatically blocks on reads if not done)
@@ -207,6 +220,8 @@ void STM32CryptoEngine::SHA256_Final(uint8_t* digest)
 
 	//hash is complete, nobody is active
 	m_activeHashEngine = NULL;
+	m_partialHashInput = 0;
+	m_partialHashLength = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
