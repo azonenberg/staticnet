@@ -84,6 +84,9 @@ STM32EthernetInterface::STM32EthernetInterface()
 	for(int i=0; i<TX_BUFFER_FRAMES; i++)
 		m_txFreeList.Push(&m_txBuffers[i]);
 
+	//Wait for this write to commit before polling DMA
+	asm("dmb st");
+
 	//Poll demand DMA RX
 	EDMA.DMARPDR = 0;
 
@@ -179,6 +182,9 @@ void STM32EthernetInterface::SendTxFrame(EthernetFrame* frame)
 	else
 		desc.TDES0 = 0xb0000000;
 
+	//Wait for this write to commit before the DMA restarts
+	asm("dmb st");
+
 	//Poll descriptor and start DMA again
 	EDMA.DMATPDR = 0;
 	EDMA.DMAOMR |= 0x2000;
@@ -187,15 +193,6 @@ void STM32EthernetInterface::SendTxFrame(EthernetFrame* frame)
 	m_nextTxDescriptorWrite = (m_nextTxDescriptorWrite + 1) % 4;
 
 	//Don't put on free list until DMA is done
-	g_log("STM32EthernetInterface::SendTxFrame: len=%d\n", frame->Length());
-	for(int i=0; i<frame->Length(); i++)
-	{
-		g_cliUART->Printf("%02x ", frame->RawData()[i]);
-		if( (i & 63) == 63)
-			g_cliUART->Printf("\n");
-	}
-	g_cliUART->Printf("\n");
-
 }
 
 void STM32EthernetInterface::CancelTxFrame(EthernetFrame* frame)
