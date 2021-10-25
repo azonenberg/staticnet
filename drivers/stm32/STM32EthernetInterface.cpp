@@ -116,6 +116,11 @@ EthernetFrame* STM32EthernetInterface::GetTxFrame()
 		return NULL;
 
 	auto frame = m_txFreeList.Pop();
+
+	#ifdef ZEROIZE_BUFFERS_BEFORE_USE
+		memset(frame, 0, sizeof(EthernetFrame));
+	#endif
+
 	return frame;
 }
 

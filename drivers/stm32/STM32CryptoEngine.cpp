@@ -30,9 +30,6 @@
 #include "STM32CryptoEngine.h"
 #include <peripheral/RCC.h>
 
-#include <util/Logger.h>
-extern Logger g_log;
-
 STM32CryptoEngine* STM32CryptoEngine::m_activeHashEngine = NULL;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,6 +47,7 @@ STM32CryptoEngine::STM32CryptoEngine()
 	//Start clocks for each block
 	RCCHelper::Enable(&RNG);
 	RCCHelper::Enable(&HASH);
+	RCCHelper::Enable(&CRYP);
 
 	//Enable clock error detection
 	RNG.CR |= RNG_CED;
@@ -229,14 +227,172 @@ void STM32CryptoEngine::SHA256_Final(uint8_t* digest)
 
 bool STM32CryptoEngine::DecryptAndVerify(uint8_t* data, uint16_t len)
 {
-	g_log("STM32CryptoEngine::DecryptAndVerify\n");
-	while(1)
+	//INIT PHASE: set up key
+	//Note that table 153 in ST RM0410 is *wrong* (see ST support case 00143246)
+	//0x2 goes to IV1RR, not IV0L as documented.
+	CRYP.CR = 0;
+	CRYP.CR = CRYP_ALG_AES_GCM | CRYP_BSWAP_BYTE | CRYP_KEY_128 | CRYP_DECRYPT | CRYP_GCM_PHASE_INIT;
+	CRYP.K0LR = 0;
+	CRYP.K0RR = 0;
+	CRYP.K1LR = 0;
+	CRYP.K1RR = 0;
+	CRYP.K2LR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyClientToServer[0]));
+	CRYP.K2RR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyClientToServer[4]));
+	CRYP.K3LR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyClientToServer[8]));
+	CRYP.K3RR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyClientToServer[12]));
+	CRYP.IV0LR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_ivClientToServer[0]));
+	CRYP.IV0RR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_ivClientToServer[4]));
+	CRYP.IV1LR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_ivClientToServer[8]));
+	CRYP.IV1RR = 2;
+
+	CRYP.CR |= CRYP_EN;
+	while(CRYP.CR & CRYP_EN)
 	{}
+	while(CRYP.SR & CRYP_BUSY)
+	{}
+
+	//HEADER PHASE: process AAD (big endian length)
+	CRYP.CR |= CRYP_GCM_PHASE_AAD;
+	CRYP.CR |= CRYP_EN;
+	CRYP.DIN = __builtin_bswap32(len - GCM_TAG_SIZE);
+	CRYP.DIN = 0x00000000;
+	CRYP.DIN = 0x00000000;
+	CRYP.DIN = 0x00000000;
+	while(CRYP.SR & CRYP_BUSY)
+	{}
+
+	//PAYLOAD PHASE
+	CRYP.CR &= ~CRYP_EN;
+	CRYP.CR = (CRYP.CR & ~CRYP_GCM_PHASE_MASK) | CRYP_GCM_PHASE_DATA;
+	CRYP.CR |= CRYP_EN;
+	int reallen = len - GCM_TAG_SIZE;
+	for(int i=0; i<reallen; i += 16)
+	{
+		for(int j=0; j<16; j+= 4)
+			CRYP.DIN = (*reinterpret_cast<uint32_t*>(data+i+j));
+
+		while( (CRYP.SR & CRYP_OFNE) == 0)
+		{}
+
+		for(int j=0; j<16; j+= 4)
+			*reinterpret_cast<uint32_t*>(data+i+j) = (CRYP.DOUT);
+	}
+
+	//FINAL PHASE
+	//Last block: block 0/2 = 0, block 1 = AAD len, block 3 = payload len
+	CRYP.CR &= ~CRYP_EN;
+	CRYP.CR &= ~CRYP_DECRYPT;
+	CRYP.CR |= CRYP_GCM_PHASE_TAG;
+	CRYP.CR |= CRYP_EN;
+	CRYP.DIN = 0;
+	CRYP.DIN = __builtin_bswap32(32);
+	CRYP.DIN = 0;
+	CRYP.DIN = __builtin_bswap32(reallen * 8);
+	while( (CRYP.SR & CRYP_OFNE) == 0)
+	{}
+	uint8_t ctag[GCM_TAG_SIZE];
+	for(int i=0; i<GCM_TAG_SIZE; i+= 4)
+		*reinterpret_cast<uint32_t*>(ctag+i) = (CRYP.DOUT);
+
+	//Verify the tag
+	for(int i=0; i<GCM_TAG_SIZE; i++)
+		ctag[i] ^= data[reallen+i];
+	uint32_t sum = 0;
+	for(int i=0; i<GCM_TAG_SIZE; i++)
+		sum += ctag[i];
+	if(sum != 0)
+		return false;
+
+	//Increment IV
+	//high 4 bytes stay constant
+	//low 8 bytes are 64 bit big endian integer
+	m_ivClientToServer[GCM_IV_SIZE-1] ++;
+	for(int i=GCM_IV_SIZE-1; i>=4; i--)
+	{
+		if(m_ivClientToServer[i] == 0)
+			m_ivClientToServer[i-1] ++;
+		else
+			break;
+	}
+
+	return true;
 }
 
 void STM32CryptoEngine::EncryptAndMAC(uint8_t* data, uint16_t len)
 {
-	g_log("STM32CryptoEngine::EncryptAndMAC\n");
-	while(1)
+	//INIT PHASE: set up key
+	//Note that table 153 in ST RM0410 is *wrong* (see ST support case 00143246)
+	//0x2 goes to IV1RR, not IV0L as documented.
+	CRYP.CR = 0;
+	CRYP.CR = CRYP_ALG_AES_GCM | CRYP_BSWAP_BYTE | CRYP_KEY_128 | CRYP_GCM_PHASE_INIT;
+	CRYP.K0LR = 0;
+	CRYP.K0RR = 0;
+	CRYP.K1LR = 0;
+	CRYP.K1RR = 0;
+	CRYP.K2LR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyServerToClient[0]));
+	CRYP.K2RR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyServerToClient[4]));
+	CRYP.K3LR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyServerToClient[8]));
+	CRYP.K3RR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyServerToClient[12]));
+	CRYP.IV0LR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_ivServerToClient[0]));
+	CRYP.IV0RR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_ivServerToClient[4]));
+	CRYP.IV1LR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_ivServerToClient[8]));
+	CRYP.IV1RR = 2;
+
+	CRYP.CR |= CRYP_EN;
+	while(CRYP.CR & CRYP_EN)
 	{}
+	while(CRYP.SR & CRYP_BUSY)
+	{}
+
+	//HEADER PHASE: process AAD (big endian length)
+	CRYP.CR |= CRYP_GCM_PHASE_AAD;
+	CRYP.CR |= CRYP_EN;
+	CRYP.DIN = __builtin_bswap32(len);
+	CRYP.DIN = 0x00000000;
+	CRYP.DIN = 0x00000000;
+	CRYP.DIN = 0x00000000;
+	while(CRYP.SR & CRYP_BUSY)
+	{}
+
+	//PAYLOAD PHASE
+	CRYP.CR &= ~CRYP_EN;
+	CRYP.CR = (CRYP.CR & ~CRYP_GCM_PHASE_MASK) | CRYP_GCM_PHASE_DATA;
+	CRYP.CR |= CRYP_EN;
+	for(int i=0; i<len; i += 16)
+	{
+		for(int j=0; j<16; j+= 4)
+			CRYP.DIN = (*reinterpret_cast<uint32_t*>(data+i+j));
+
+		while( (CRYP.SR & CRYP_OFNE) == 0)
+		{}
+
+		for(int j=0; j<16; j+= 4)
+			*reinterpret_cast<uint32_t*>(data+i+j) = (CRYP.DOUT);
+	}
+
+	//FINAL PHASE
+	//Last block: block 0/2 = 0, block 1 = AAD len, block 3 = payload len
+	CRYP.CR &= ~CRYP_EN;
+	CRYP.CR |= CRYP_GCM_PHASE_TAG;
+	CRYP.CR |= CRYP_EN;
+	CRYP.DIN = 0;
+	CRYP.DIN = __builtin_bswap32(32);
+	CRYP.DIN = 0;
+	CRYP.DIN = __builtin_bswap32(len * 8);
+	while( (CRYP.SR & CRYP_OFNE) == 0)
+	{}
+	for(int i=0; i<GCM_TAG_SIZE; i+= 4)
+		*reinterpret_cast<uint32_t*>(data+len+i) = (CRYP.DOUT);
+
+	//Increment IV
+	//high 4 bytes stay constant
+	//low 8 bytes are 64 bit big endian integer
+	m_ivServerToClient[GCM_IV_SIZE-1] ++;
+	for(int i=GCM_IV_SIZE-1; i>=4; i--)
+	{
+		if(m_ivServerToClient[i] == 0)
+			m_ivServerToClient[i-1] ++;
+		else
+			break;
+	}
 }
