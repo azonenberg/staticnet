@@ -29,6 +29,7 @@
 
 #include <staticnet-config.h>
 #include "../stack/staticnet.h"
+#include "../contrib/base64.h"
 #include "CryptoEngine.h"
 
 uint8_t CryptoEngine::m_hostkeyPriv[32];
@@ -72,6 +73,8 @@ void CryptoEngine::Clear()
 
 /**
 	@brief Derives all of our session key material
+
+	This function uses the SHA256 engine and will overwrite any in progress SHA256 hash.
  */
 void CryptoEngine::DeriveSessionKeys(uint8_t* sharedSecret, uint8_t* exchangeHash, uint8_t* sessionID)
 {
@@ -88,6 +91,8 @@ void CryptoEngine::DeriveSessionKeys(uint8_t* sharedSecret, uint8_t* exchangeHas
 
 /**
 	@brief Derives a single session key
+
+	This function uses the SHA256 engine and will overwrite any in progress SHA256 hash.
  */
 void CryptoEngine::DeriveSessionKey(uint8_t* sharedSecret, uint8_t* exchangeHash, uint8_t* sessionID, char keyid, uint8_t* out)
 {
@@ -120,4 +125,42 @@ void CryptoEngine::GenerateHostKey()
 {
 	GenerateRandom(m_hostkeyPriv, sizeof(m_hostkeyPriv));
 	crypto_sign_keypair(m_hostkeyPub, m_hostkeyPriv);
+}
+
+/**
+	@brief Gets the host key fingerprint (base64 encoded SHA256).
+
+	This function uses the SHA256 engine and will overwrite any in progress SHA256 hash.
+ */
+void CryptoEngine::GetHostKeyFingerprint(char* buf, size_t len)
+{
+	if(len < 49)
+		return;
+
+	//Hash the public key (in RFC 4252 format)
+	SHA256_Init();
+	uint32_t tmp = __builtin_bswap32(11);
+	SHA256_Update((uint8_t*)&tmp, sizeof(tmp));
+	SHA256_Update((uint8_t*)"ssh-ed25519", 11);
+	tmp = __builtin_bswap32(32);
+	SHA256_Update((uint8_t*)&tmp, sizeof(tmp));
+	SHA256_Update(m_hostkeyPub, ECDH_KEY_SIZE);
+
+	//Done hashing
+	uint8_t digest[SHA256_DIGEST_SIZE];
+	SHA256_Final(digest);
+
+	//Base64 encode
+	base64_encodestate state;
+	base64_init_encodestate(&state);
+	int count = base64_encode_block((char*)digest, SHA256_DIGEST_SIZE, buf, &state);
+	count += base64_encode_blockend(buf + count, &state);
+	buf[count] = '\0';
+
+	//Strip padding characters since OpenSSH doesn't show them
+	for(int i=count-1; i >= 0; i--)
+	{
+		if(buf[i] == '=')
+			buf[i] = '\0';
+	}
 }

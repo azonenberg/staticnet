@@ -140,6 +140,8 @@ public:
 	 */
 	virtual void EncryptAndMAC(uint8_t* data, uint16_t len) =0;
 
+	void GetHostKeyFingerprint(char* buf, size_t len);
+
 protected:
 
 	///@brief Ed25519 SSH host key (public)
