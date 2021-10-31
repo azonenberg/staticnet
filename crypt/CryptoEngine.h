@@ -37,6 +37,7 @@
 #include <staticnet/contrib/tweetnacl_25519.h>
 
 #define ECDH_KEY_SIZE		32
+#define ECDSA_KEY_SIZE		32
 #define SHA256_DIGEST_SIZE	32
 #define AES_BLOCK_SIZE		16
 #define AES_KEY_SIZE		16
@@ -60,9 +61,11 @@ public:
 
 	static void SetHostKey(const uint8_t* pub, const uint8_t* priv)
 	{
-		memcpy(m_hostkeyPriv, priv, ECDH_KEY_SIZE);
-		memcpy(m_hostkeyPub, pub, ECDH_KEY_SIZE);
+		memcpy(m_hostkeyPriv, priv, ECDSA_KEY_SIZE);
+		memcpy(m_hostkeyPub, pub, ECDSA_KEY_SIZE);
 	}
+
+	void GenerateHostKey();
 
 	virtual void Clear();
 
@@ -85,14 +88,18 @@ public:
 	}
 
 	///@brief Returns the host public key
-	const uint8_t* GetHostPublicKey()
+	static const uint8_t* GetHostPublicKey()
 	{ return m_hostkeyPub; }
+
+	///@brief Returns the host private key (normally only used for initial key generation to persist it to flash)
+	static const uint8_t* GetHostPrivateKey()
+	{ return m_hostkeyPriv; }
 
 	///@brief Signs an exchange hash with our host key
 	void SignExchangeHash(uint8_t* sigOut, uint8_t* exchangeHash)
 	{
 		//tweetnacl wants the public key here which is kinda derpy, we don't actually need it
-		//TODO: optimize out this stupidiy
+		//TODO: optimize out this stupidity
 		uint8_t keyCombined[64];
 		memcpy(keyCombined, m_hostkeyPriv, 32);
 		memcpy(keyCombined + 32, m_hostkeyPub, 32);
@@ -136,10 +143,10 @@ public:
 protected:
 
 	///@brief Ed25519 SSH host key (public)
-	static uint8_t m_hostkeyPub[ECDH_KEY_SIZE];
+	static uint8_t m_hostkeyPub[ECDSA_KEY_SIZE];
 
 	///@brief Ed25519 SSH host key (private)
-	static uint8_t m_hostkeyPriv[ECDH_KEY_SIZE];
+	static uint8_t m_hostkeyPriv[ECDSA_KEY_SIZE];
 
 	///@brief Ephemeral x25519 private key
 	uint8_t m_ephemeralkeyPriv[ECDH_KEY_SIZE];

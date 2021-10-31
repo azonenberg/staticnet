@@ -40,6 +40,8 @@ uint8_t CryptoEngine::m_hostkeyPub[32];
 CryptoEngine::CryptoEngine()
 {
 	memset(m_ephemeralkeyPriv, 0, sizeof(m_ephemeralkeyPriv));
+
+	//Generate a new random SSH host key
 }
 
 CryptoEngine::~CryptoEngine()
@@ -106,4 +108,16 @@ void CryptoEngine::DeriveSessionKey(uint8_t* sharedSecret, uint8_t* exchangeHash
 	SHA256_Update((uint8_t*)&keyid, 1);
 	SHA256_Update(sessionID, SHA256_DIGEST_SIZE);
 	SHA256_Final(out);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Host key generation
+
+/**
+	@brief Performs initial host key generation
+ */
+void CryptoEngine::GenerateHostKey()
+{
+	GenerateRandom(m_hostkeyPriv, sizeof(m_hostkeyPriv));
+	crypto_sign_keypair(m_hostkeyPub, m_hostkeyPriv);
 }
