@@ -126,6 +126,8 @@ void STM32CryptoEngine::HashContextSwitchIn()
 
 void STM32CryptoEngine::SHA256_Init()
 {
+	m_partialHashLength = 0;
+
 	//We have no context to restore
 	//but if somebody ELSE has a hash in progress, we might need to swap them out.
 	if( (m_activeHashEngine != NULL) && (m_activeHashEngine != this) )
