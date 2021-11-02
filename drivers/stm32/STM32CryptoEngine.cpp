@@ -201,8 +201,10 @@ void STM32CryptoEngine::SHA256_Final(uint8_t* digest)
 
 	//If we have partial data, shift it so it's right justified, then push it
 	if(m_partialHashLength != 0)
+	{
 		m_partialHashInput >>= 8 * (4 - m_partialHashLength);
-	HASH.DIN = m_partialHashInput;
+		HASH.DIN = m_partialHashInput;
+	}
 
 	//Start the last hash block
 	if(m_partialHashLength != 0)
