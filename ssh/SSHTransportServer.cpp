@@ -48,10 +48,10 @@
 #include "SSHDisconnectPacket.h"
 
 //Our single supported cipher suite
-static const char* g_sshKexAlg				= "curve25519-sha256";				//RFC 8731
+static const char* g_sshKexAlg				= "curve25519-sha256";			//RFC 8731
 static const char* g_sshHostKeyAlg			= "ssh-ed25519";
 static const char* g_sshEncryptionAlg		= "aes128-gcm@openssh.com";
-static const char* g_sshMacAlg				= "none";	//implicit in GCM
+static const char* g_sshMacAlg				= "none";						//implicit in GCM
 static const char* g_sshCompressionAlg		= "none";
 
 //Other global strings for magic values
