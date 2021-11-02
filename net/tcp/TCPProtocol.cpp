@@ -150,9 +150,20 @@ void TCPProtocol::OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress)
 /**
 	@brief Handles an incoming RST
  */
-void TCPProtocol::OnRxRST(TCPSegment* /*segment*/, IPv4Address /*sourceAddress*/)
+void TCPProtocol::OnRxRST(TCPSegment* segment, IPv4Address sourceAddress)
 {
-	//printf("TODO: handle RST\n");
+	//Look up the socket handle for this segment. Drop silently if not a valid segment
+	//TODO: should we send a RST?
+	auto state = GetSocketState(sourceAddress, segment->m_destPort, segment->m_sourcePort);
+	if(state == NULL)
+		return;
+
+	//Notify the upper layer protocol
+	OnConnectionClosed(state);
+
+	//Connection is getting torn down, so close our socket state.
+	//Normally we'd go to TIME-WAIT but just close it right away so we can reuse the table entry.
+	state->m_valid = false;
 }
 
 /**
@@ -200,6 +211,9 @@ void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16
 		//FIN counts as a data byte so increment our ACK number
 		payload->m_offsetAndFlags |= TCPSegment::FLAG_FIN;
 		payload->m_ack ++;
+
+		//Notify the upper layer protocol
+		OnConnectionClosed(state);
 
 		//Connection is getting torn down, so close our socket state.
 		//Normally we'd go to TIME-WAIT but just close it right away so we can reuse the table entry.
@@ -352,6 +366,17 @@ TCPTableEntry* TCPProtocol::AllocateSocketHandle(uint16_t hash)
 	The default implementation does nothing.
  */
 void TCPProtocol::OnConnectionAccepted(TCPTableEntry* /*state*/)
+{
+}
+
+/**
+	@brief Handler for the end of a connection
+
+	Override to destroy application-layer state when a connection is no longer active.
+
+	The default implementation does nothing.
+ */
+void TCPProtocol::OnConnectionClosed(TCPTableEntry* /*state*/)
 {
 }
 

@@ -136,6 +136,7 @@ public:
 
 	//Event handlers
 	void OnConnectionAccepted(TCPTableEntry* socket);
+	void OnConnectionClosed(TCPTableEntry* socket);
 	bool OnRxData(TCPTableEntry* socket, uint8_t* payload, uint16_t payloadLen);
 
 	TCPSegment* GetTxSegment(TCPTableEntry* socket)

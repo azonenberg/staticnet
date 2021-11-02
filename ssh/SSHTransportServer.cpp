@@ -131,6 +131,17 @@ void SSHTransportServer::OnConnectionAccepted(TCPTableEntry* socket)
 }
 
 /**
+	@brief Tears down a connection when the socket is closed
+ */
+void SSHTransportServer::OnConnectionClosed(TCPTableEntry* socket)
+{
+	//Connection was terminated by the other end, close our state so we can reuse it
+	auto id = GetConnectionID(socket);
+	if(id >= 0)
+		m_state[id].Clear();
+}
+
+/**
 	@brief Handler for incoming TCP segments
  */
 bool SSHTransportServer::OnRxData(TCPTableEntry* socket, uint8_t* payload, uint16_t payloadLen)
