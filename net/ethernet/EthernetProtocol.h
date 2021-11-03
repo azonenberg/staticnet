@@ -76,6 +76,11 @@ public:
 	const MACAddress& GetMACAddress()
 	{ return m_mac; }
 
+	void OnAgingTick();
+
+	ARPProtocol* GetARP()
+	{ return m_arp; }
+
 protected:
 
 	///@brief Driver for the Ethernet MAC

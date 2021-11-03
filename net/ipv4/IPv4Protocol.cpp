@@ -124,6 +124,14 @@ IPv4Protocol::AddressType IPv4Protocol::GetAddressType(IPv4Address addr)
 		return ADDR_UNICAST_OTHER;
 }
 
+/**
+	@brief Checks if an address is in our local subnet or not
+ */
+bool IPv4Protocol::IsLocalSubnet(IPv4Address addr)
+{
+	return (addr.m_word & m_config.m_netmask.m_word) == (m_config.m_address.m_word & m_config.m_netmask.m_word);
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Handler for incoming packets
 

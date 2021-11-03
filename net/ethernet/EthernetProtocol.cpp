@@ -88,7 +88,10 @@ void EthernetProtocol::OnRxFrame(EthernetFrame* frame)
 				//TODO: wait until upper layer checksum is validated?
 				auto packet = reinterpret_cast<IPv4Packet*>(frame->Payload());
 				if(m_arp)
-					m_arp->Insert(frame->SrcMAC(), packet->m_sourceAddress);
+				{
+					if(m_ipv4->IsLocalSubnet(packet->m_sourceAddress))
+						m_arp->Insert(frame->SrcMAC(), packet->m_sourceAddress);
+				}
 
 				//then process it
 				m_ipv4->OnRxPacket(packet, plen);
@@ -125,4 +128,18 @@ EthernetFrame* EthernetProtocol::GetTxFrame(ethertype_t type, const MACAddress& 
 
 	//Done
 	return frame;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Aging
+
+/**
+	@brief Timer handler for aging out stale sockets
+
+	Call this function at approximately 1 Hz.
+ */
+void EthernetProtocol::OnAgingTick()
+{
+	if(m_arp)
+		m_arp->OnAgingTick();
 }

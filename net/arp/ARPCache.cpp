@@ -35,6 +35,7 @@
 
 ARPCache::ARPCache()
 	: m_nextWayToEvict(0)
+	, m_cacheLifetime(300)
 {
 }
 
@@ -95,10 +96,11 @@ void ARPCache::Insert(MACAddress& mac, IPv4Address ip)
 		//There's something in the row. We can't insert here.
 		if(row.m_valid)
 		{
-			//Does the row already have an entry for this IP? Update the MAC if needed, then we're done
+			//Does the row already have an entry for this IP? Update the MAC and lifetime, then we're done
 			if(row.m_ip == ip)
 			{
 				row.m_mac = mac;
+				row.m_lifetime = m_cacheLifetime;
 				return;
 			}
 
@@ -130,4 +132,28 @@ void ARPCache::Insert(MACAddress& mac, IPv4Address ip)
 	row.m_valid = true;
 	row.m_ip = ip;
 	row.m_mac = mac;
+	row.m_lifetime = m_cacheLifetime;
+}
+
+/**
+	@brief Timer handler for aging out stale cache entries
+
+	Call this function at approximately 1 Hz.
+ */
+void ARPCache::OnAgingTick()
+{
+	for(size_t i=0; i<ARP_CACHE_WAYS; i++)
+	{
+		for(size_t j=0; j<ARP_CACHE_LINES; j++)
+		{
+			auto& row = m_ways[i].m_lines[j];
+			if(row.m_valid)
+			{
+				if(row.m_lifetime == 0)
+					row.m_valid = false;
+				else
+					row.m_lifetime --;
+			}
+		}
+	}
 }

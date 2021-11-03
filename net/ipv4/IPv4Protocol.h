@@ -103,6 +103,7 @@ public:
 	{ m_tcp = tcp; }
 
 	AddressType GetAddressType(IPv4Address addr);
+	bool IsLocalSubnet(IPv4Address addr);
 
 protected:
 

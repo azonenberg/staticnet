@@ -49,6 +49,7 @@ public:
 	{}
 
 	bool m_valid;
+	uint16_t m_lifetime;
 	IPv4Address m_ip;
 	MACAddress m_mac;
 };
@@ -73,15 +74,30 @@ public:
 	bool Lookup(MACAddress& mac, IPv4Address ip);
 	void Insert(MACAddress& mac, IPv4Address ip);
 
-	//TODO: aging
+	void OnAgingTick();
+
+	/**
+		@brief Returns the number of ways in the cache
+	 */
+	uint32_t GetWays()
+	{ return ARP_CACHE_WAYS; }
+
+	/**
+		@brief Returns the number of lines in each way of the cache
+	 */
+	uint32_t GetLines()
+	{ return ARP_CACHE_LINES; }
 
 protected:
 
 	///@brief The actual cache data
 	ARPCacheWay m_ways[ARP_CACHE_WAYS];
 
-	//@brief Cache way to evict next time there's contention for space
+	///@brief Cache way to evict next time there's contention for space
 	size_t m_nextWayToEvict;
+
+	///@brief Lifetime of cache entries, in seconds
+	uint16_t m_cacheLifetime;
 
 	size_t Hash(IPv4Address ip);
 };

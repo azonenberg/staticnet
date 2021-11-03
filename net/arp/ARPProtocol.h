@@ -58,18 +58,29 @@ public:
 	void Insert(MACAddress& mac, IPv4Address ip)
 	{ m_cache.Insert(mac, ip); }
 
+	/**
+		@brief Timer handler for aging out stale cache entries
+
+		Call this function at approximately 1 Hz.
+	 */
+	void OnAgingTick()
+	{ m_cache.OnAgingTick(); }
+
+	ARPCache* GetCache()
+	{ return &m_cache; }
+
 protected:
 
 	void OnRequestPacket(ARPPacket* packet);
 	void OnReplyPacket(ARPPacket* packet);
 
-	///The Ethernet protocol stack
+	///@brief The Ethernet protocol stack
 	EthernetProtocol& m_eth;
 
-	///Our local IP address
+	///@brief Our local IP address
 	IPv4Address& m_ip;
 
-	///Cache for storing IP -> MAC associations
+	///@brief Cache for storing IP -> MAC associations
 	ARPCache& m_cache;
 };
 
