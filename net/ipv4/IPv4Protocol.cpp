@@ -235,31 +235,45 @@ void IPv4Protocol::OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength
 IPv4Packet* IPv4Protocol::GetTxPacket(IPv4Address dest, ipproto_t proto)
 {
 	//Find target MAC address
-	auto type = GetAddressType(dest);
+	//If not in our subnet, send it to the default gateway
 	MACAddress destmac = {{0, 0, 0, 0, 0, 0}};
-	switch(type)
+	if(!IsLocalSubnet(dest))
 	{
-		//TODO: use well known mac for some multicasts
-		//For now, just fall through to broadcast MAC
-		case ADDR_MULTICAST:
-
-		//If it's a broadcast, set it to a layer-2 broadcast MAC
-		case ADDR_BROADCAST:
-			destmac = MACAddress{{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
-			break;
-
-		//Unicast? Check the ARP table
-		case ADDR_UNICAST_OTHER:
-			if(!m_cache.Lookup(destmac, dest))
-			{
-				//TODO: send ARP query for this IP so we can try again
-				return NULL;
-			}
-			break;
-
-		//invalid destination (can't send to ourself)
-		default:
+		if(!m_cache.Lookup(destmac, m_config.m_gateway))
+		{
+			//TODO: send ARP query for this IP so we can try again
 			return NULL;
+		}
+	}
+
+	//It's in the local subnet. Either broadcast or ARP
+	else
+	{
+		auto type = GetAddressType(dest);
+		switch(type)
+		{
+			//TODO: use well known mac for some multicasts
+			//For now, just fall through to broadcast MAC
+			case ADDR_MULTICAST:
+
+			//If it's a broadcast, set it to a layer-2 broadcast MAC
+			case ADDR_BROADCAST:
+				destmac = MACAddress{{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+				break;
+
+			//Unicast? Check the ARP table
+			case ADDR_UNICAST_OTHER:
+				if(!m_cache.Lookup(destmac, dest))
+				{
+					//TODO: send ARP query for this IP so we can try again
+					return NULL;
+				}
+				break;
+
+			//invalid destination (can't send to ourself)
+			default:
+				return NULL;
+		}
 	}
 
 	//Allocate the frame and fill headers

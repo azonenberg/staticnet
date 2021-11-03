@@ -88,6 +88,9 @@ public:
 	uint32_t GetLines()
 	{ return ARP_CACHE_LINES; }
 
+	const ARPCacheWay* GetWay(uint32_t i)
+	{ return &m_ways[i]; }
+
 protected:
 
 	///@brief The actual cache data
