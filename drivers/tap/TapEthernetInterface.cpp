@@ -2,7 +2,7 @@
 *                                                                                                                      *
 * staticnet v0.1                                                                                                       *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2023 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -41,6 +41,8 @@
 #include <string.h>
 #include <thread>
 #include <sys/signal.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
@@ -57,7 +59,15 @@ TapEthernetInterface::TapEthernetInterface(const char* name)
 		abort();
 	}
 
-	//Configure and name it
+	/*
+
+		Configure and name it
+
+		May need "ip tuntap add name simtap mode tap user <username> as root first
+		to do this as a non-root user.
+
+		Tried to add CAP_NET_ADMIN | CAP_NET_RAW but this was insufficient for ioctl TUNSETIFF to work?
+	 */
 	ifreq ifr;
 	memset(&ifr, 0, sizeof(ifr));
 	ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
