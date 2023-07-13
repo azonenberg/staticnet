@@ -2,7 +2,7 @@
 *                                                                                                                      *
 * staticnet v0.1                                                                                                       *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2023 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -111,8 +111,7 @@ public:
 	}
 
 	///@brief Calculates the shared secret between our ephemeral private key and the client's public key
-	void SharedSecret(uint8_t* sharedSecret, uint8_t* clientPublicKey)
-	{ crypto_scalarmult(sharedSecret, m_ephemeralkeyPriv, clientPublicKey); }
+	virtual void SharedSecret(uint8_t* sharedSecret, uint8_t* clientPublicKey);
 
 	///@brief Initialize the SHA-256 context
 	virtual void SHA256_Init() =0;

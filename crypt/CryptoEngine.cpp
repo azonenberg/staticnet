@@ -2,7 +2,7 @@
 *                                                                                                                      *
 * staticnet v0.1                                                                                                       *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2023 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -113,6 +113,11 @@ void CryptoEngine::DeriveSessionKey(uint8_t* sharedSecret, uint8_t* exchangeHash
 	SHA256_Update((uint8_t*)&keyid, 1);
 	SHA256_Update(sessionID, SHA256_DIGEST_SIZE);
 	SHA256_Final(out);
+}
+
+void CryptoEngine::SharedSecret(uint8_t* sharedSecret, uint8_t* clientPublicKey)
+{
+	crypto_scalarmult(sharedSecret, m_ephemeralkeyPriv, clientPublicKey);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
