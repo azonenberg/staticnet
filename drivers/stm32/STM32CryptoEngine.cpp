@@ -49,11 +49,33 @@ STM32CryptoEngine::STM32CryptoEngine()
 	RCCHelper::Enable(&HASH);
 	RCCHelper::Enable(&CRYP);
 
-	//Enable clock error detection
-	RNG.CR |= RNG_CED;
+	#ifdef STM32H7
 
-	//Turn on the RNG
-	RNG.CR |= RNG_EN;
+		//Soft reset
+		RNG.CR |= RNG_CONDRST;
+		RNG.CR &= ~RNG_CONDRST;
+
+		//Initialize the RNG
+		uint32_t rng_config1 = 0xF;
+		uint32_t rng_config2 = 0;
+		uint32_t rng_config3 = 0xD;
+		RNG.CR = (rng_config1 << 20) | (rng_config2 << 13) | (rng_config3 << 8);
+		RNG.HTCR = 0x17590abc;	//magic unlock value
+		RNG.HTCR = 0x0000aa74;	//health test config value
+
+		//Turn on the RNG
+		RNG.CR |= RNG_EN;
+
+	#elif defined (STM32F7)
+
+		//Turn on the RNG
+		RNG.CR |= RNG_EN;
+
+	#else
+
+		#error Unknown crypto block (not implemented)
+
+	#endif
 }
 
 STM32CryptoEngine::~STM32CryptoEngine()
@@ -76,9 +98,14 @@ void STM32CryptoEngine::GenerateRandom(uint8_t* buf, size_t len)
 {
 	for(size_t i=0; i<len; i+=4)
 	{
-		//Block if RNG is in error state
-		while( (RNG.SR & (RNG_SECS | RNG_CECS)) != 0)
-		{}
+		//Reset if RNG is in error state
+		if( (RNG.SR & (RNG_SECS | RNG_CECS)) != 0)
+		{
+			RNG.CR |= RNG_CONDRST;
+			RNG.CR &= ~RNG_CONDRST;
+			while( (RNG.SR & (RNG_SECS | RNG_CECS)) != 0)
+			{}
+		}
 
 		//Block until data is ready to read
 		while( (RNG.SR & RNG_DRDY) == 0)
@@ -231,10 +258,18 @@ void STM32CryptoEngine::SHA256_Final(uint8_t* digest)
 
 bool STM32CryptoEngine::DecryptAndVerify(uint8_t* data, uint16_t len)
 {
+	CRYP.CR = 0;
+
+	//Flush the FIFOs
+	#ifdef STM32H7
+	while(CRYP.SR & CRYP_BUSY)
+	{}
+	CRYP.CR |= CRYP_FFLUSH;
+	#endif
+
 	//INIT PHASE: set up key
 	//Note that table 153 in ST RM0410 is *wrong* (see ST support case 00143246)
 	//0x2 goes to IV1RR, not IV0L as documented.
-	CRYP.CR = 0;
 	CRYP.CR = CRYP_ALG_AES_GCM | CRYP_BSWAP_BYTE | CRYP_KEY_128 | CRYP_DECRYPT | CRYP_GCM_PHASE_INIT;
 	CRYP.K0LR = 0;
 	CRYP.K0RR = 0;
@@ -288,10 +323,17 @@ bool STM32CryptoEngine::DecryptAndVerify(uint8_t* data, uint16_t len)
 	CRYP.CR &= ~CRYP_DECRYPT;
 	CRYP.CR |= CRYP_GCM_PHASE_TAG;
 	CRYP.CR |= CRYP_EN;
+	#ifdef STM32H7
+	CRYP.DIN = 0;
+	CRYP.DIN = 32;
+	CRYP.DIN = 0;
+	CRYP.DIN = reallen * 8;
+	#elif defined(STM32F7)
 	CRYP.DIN = 0;
 	CRYP.DIN = __builtin_bswap32(32);
 	CRYP.DIN = 0;
 	CRYP.DIN = __builtin_bswap32(reallen * 8);
+	#endif
 	while( (CRYP.SR & CRYP_OFNE) == 0)
 	{}
 	uint8_t ctag[GCM_TAG_SIZE];
@@ -379,10 +421,17 @@ void STM32CryptoEngine::EncryptAndMAC(uint8_t* data, uint16_t len)
 	CRYP.CR &= ~CRYP_EN;
 	CRYP.CR |= CRYP_GCM_PHASE_TAG;
 	CRYP.CR |= CRYP_EN;
+	#ifdef STM32H7
+	CRYP.DIN = 0;
+	CRYP.DIN = 32;
+	CRYP.DIN = 0;
+	CRYP.DIN = len * 8;
+	#elif defined(STM32F7)
 	CRYP.DIN = 0;
 	CRYP.DIN = __builtin_bswap32(32);
 	CRYP.DIN = 0;
 	CRYP.DIN = __builtin_bswap32(len * 8);
+	#endif
 	while( (CRYP.SR & CRYP_OFNE) == 0)
 	{}
 	for(int i=0; i<GCM_TAG_SIZE; i+= 4)
