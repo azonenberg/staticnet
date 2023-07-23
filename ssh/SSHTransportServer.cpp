@@ -991,7 +991,7 @@ void SSHTransportServer::OnRxChannelRequest(int id, TCPTableEntry* socket, SSHTr
 			auto segment = m_tcp.GetTxSegment(socket);
 			auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 			reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_FAILURE;
-			auto fail = reinterpret_cast<SSHChannelStatusPacket*>(packet->Payload());
+			auto fail = reinterpret_cast<SSHChannelStatusPacket*>(reply->Payload());
 			fail->m_clientChannel = m_state[id].m_sessionChannelID;
 			fail->ByteSwap();
 			SendEncryptedPacket(id, sizeof(SSHChannelStatusPacket), segment, reply, socket);
@@ -1005,7 +1005,7 @@ void SSHTransportServer::OnRxChannelRequest(int id, TCPTableEntry* socket, SSHTr
 		auto segment = m_tcp.GetTxSegment(socket);
 		auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 		reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_SUCCESS;
-		auto success = reinterpret_cast<SSHChannelStatusPacket*>(packet->Payload());
+		auto success = reinterpret_cast<SSHChannelStatusPacket*>(reply->Payload());
 		success->m_clientChannel = m_state[id].m_sessionChannelID;
 		success->ByteSwap();
 		SendEncryptedPacket(id, sizeof(SSHChannelStatusPacket), segment, reply, socket);
