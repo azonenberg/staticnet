@@ -76,16 +76,7 @@ public:
 
 		The public key is stored in the provided buffer, which must be at least 32 bytes in size.
 	 */
-	void GenerateX25519KeyPair(uint8_t* pub)
-	{
-		//To be a valid key, a few bits need well-defined values. The rest are cryptographic randomness.
-		GenerateRandom(m_ephemeralkeyPriv, 32);
-		m_ephemeralkeyPriv[0] &= 0xF8;
-		m_ephemeralkeyPriv[31] &= 0x7f;
-		m_ephemeralkeyPriv[31] |= 0x40;
-
-		crypto_scalarmult_base(pub, m_ephemeralkeyPriv);
-	}
+	virtual void GenerateX25519KeyPair(uint8_t* pub);
 
 	///@brief Returns the host public key
 	static const uint8_t* GetHostPublicKey()
