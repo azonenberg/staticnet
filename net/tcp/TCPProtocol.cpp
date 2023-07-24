@@ -2,7 +2,7 @@
 *                                                                                                                      *
 * staticnet v0.1                                                                                                       *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2023 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -95,7 +95,7 @@ void TCPProtocol::OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress)
 	{
 		//Get ready to send a reply, if no free buffers give up
 		auto reply = m_ipv4->GetTxPacket(sourceAddress, IPv4Protocol::IP_PROTO_TCP);
-		if(reply == NULL)
+		if(reply == nullptr)
 			return;
 
 		//Format the reply
@@ -118,7 +118,7 @@ void TCPProtocol::OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress)
 
 	//Figure out which socket table entry to use
 	auto state = AllocateSocketHandle(Hash(sourceAddress, segment->m_destPort, segment->m_sourcePort));
-	if(state == NULL)
+	if(state == nullptr)
 	{
 		//No free socket handles available.
 		//Silently drop the connection request
@@ -134,6 +134,8 @@ void TCPProtocol::OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress)
 
 	//Prepare the reply
 	auto reply = CreateReply(state);
+	if(!reply)
+		return;
 	auto payload = reinterpret_cast<TCPSegment*>(reply->Payload());
 	payload->m_offsetAndFlags |= TCPSegment::FLAG_SYN;
 
@@ -155,7 +157,7 @@ void TCPProtocol::OnRxRST(TCPSegment* segment, IPv4Address sourceAddress)
 	//Look up the socket handle for this segment. Drop silently if not a valid segment
 	//TODO: should we send a RST?
 	auto state = GetSocketState(sourceAddress, segment->m_destPort, segment->m_sourcePort);
-	if(state == NULL)
+	if(state == nullptr)
 		return;
 
 	//Notify the upper layer protocol
@@ -174,7 +176,7 @@ void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16
 	//Look up the socket handle for this segment. Drop silently if not a valid segment
 	//TODO: should we send a RST?
 	auto state = GetSocketState(sourceAddress, segment->m_destPort, segment->m_sourcePort);
-	if(state == NULL)
+	if(state == nullptr)
 		return;
 
 	//If remote sequence number is too BIG: we missed a packet, this is the next one in line.
@@ -204,6 +206,8 @@ void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16
 
 	//Send our reply
 	auto reply = CreateReply(state);
+	if(!reply)
+		return;
 	auto payload = reinterpret_cast<TCPSegment*>(reply->Payload());
 	if(segment->m_offsetAndFlags & TCPSegment::FLAG_FIN)
 	{
@@ -248,8 +252,8 @@ IPv4Packet* TCPProtocol::CreateReply(TCPTableEntry* state)
 {
 	//Get ready to send a reply, if no free buffers give up
 	auto reply = m_ipv4->GetTxPacket(state->m_remoteIP, IPv4Protocol::IP_PROTO_TCP);
-	if(reply == NULL)
-		return NULL;
+	if(reply == nullptr)
+		return nullptr;
 
 	//Format the reply
 	auto payload = reinterpret_cast<TCPSegment*>(reply->Payload());
@@ -326,7 +330,7 @@ TCPTableEntry* TCPProtocol::GetSocketState(IPv4Address ip, uint16_t localPort, u
 	}
 
 	//Not a valid socket
-	return NULL;
+	return nullptr;
 }
 
 /**
@@ -352,7 +356,7 @@ TCPTableEntry* TCPProtocol::AllocateSocketHandle(uint16_t hash)
 	}
 
 	//No free entries found
-	return NULL;
+	return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
