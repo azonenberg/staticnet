@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -69,7 +69,7 @@ static const char* g_strShellReq			= "shell";
 // Construction / destruction
 
 SSHTransportServer::SSHTransportServer(TCPProtocol& tcp)
-	: m_tcp(tcp)
+	: TCPServer(tcp)
 	, m_passwordAuth(NULL)
 {
 }
@@ -80,42 +80,6 @@ SSHTransportServer::~SSHTransportServer()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Event handlers
-
-/**
-	@brief Allocates a new connection ID for a connection, or returns -1 if there are no free table entries
- */
-int SSHTransportServer::AllocateConnectionID(TCPTableEntry* socket)
-{
-	for(int i=0; i<SSH_TABLE_SIZE; i++)
-	{
-		if(!m_state[i].m_valid)
-		{
-			//Make sure old state is completely wiped
-			m_state[i].Clear();
-
-			m_state[i].m_valid = true;
-			m_state[i].m_socket = socket;
-			return i;
-		}
-	}
-
-	return -1;
-}
-
-/**
-	@brief Finds the connection ID for a TCP socket, or returns -1 if it's not a currently connected session
- */
-int SSHTransportServer::GetConnectionID(TCPTableEntry* socket)
-{
-	//Just a linear search for now
-	for(int i=0; i<SSH_TABLE_SIZE; i++)
-	{
-		if(m_state[i].m_valid && (m_state[i].m_socket == socket))
-			return i;
-	}
-
-	return -1;
-}
 
 /**
 	@brief Handles a newly accepted connection

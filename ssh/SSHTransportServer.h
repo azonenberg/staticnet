@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -37,6 +37,7 @@
 #include "../crypt/CryptoEngine.h"
 #include "../util/CircularFIFO.h"
 #include "SSHPasswordAuthenticator.h"
+#include "../net/tcp/TCPServer.h"
 
 class SSHTransportPacket;
 class SSHKexInitPacket;
@@ -128,19 +129,16 @@ public:
 
 	Derived classes must initialize crypto engines in the constructor.
  */
-class SSHTransportServer
+class SSHTransportServer : public TCPServer<SSH_TABLE_SIZE, SSHConnectionState>
 {
 public:
 	SSHTransportServer(TCPProtocol& tcp);
 	virtual ~SSHTransportServer();
 
 	//Event handlers
-	void OnConnectionAccepted(TCPTableEntry* socket);
-	void OnConnectionClosed(TCPTableEntry* socket);
-	bool OnRxData(TCPTableEntry* socket, uint8_t* payload, uint16_t payloadLen);
-
-	TCPSegment* GetTxSegment(TCPTableEntry* socket)
-	{ return m_tcp.GetTxSegment(socket); }
+	virtual void OnConnectionAccepted(TCPTableEntry* socket) override;
+	virtual void OnConnectionClosed(TCPTableEntry* socket) override;
+	virtual bool OnRxData(TCPTableEntry* socket, uint8_t* payload, uint16_t payloadLen) override;
 
 	void SendEncryptedPacket(
 		int id,
@@ -167,12 +165,9 @@ public:
 	void UsePasswordAuthenticator(SSHPasswordAuthenticator* auth)
 	{ m_passwordAuth = auth; }
 
-	virtual void GracefulDisconnect(int id, TCPTableEntry* socket);
+	virtual void GracefulDisconnect(int id, TCPTableEntry* socket) override;
 
 protected:
-
-	int GetConnectionID(TCPTableEntry* socket);
-	int AllocateConnectionID(TCPTableEntry* socket);
 
 	void OnRxBanner(int id, TCPTableEntry* socket);
 	void OnRxKexInit(int id, TCPTableEntry* socket);
@@ -210,14 +205,8 @@ protected:
 	SSHTransportPacket* PeekPacket(SSHConnectionState& state);
 	void PopPacket(SSHConnectionState& state);
 
-	///@brief The transport layer for our traffic
-	TCPProtocol& m_tcp;
-
 	///@brief The authenticator for password logins
 	SSHPasswordAuthenticator* m_passwordAuth;
-
-	///@brief The SSH connection table
-	SSHConnectionState m_state[SSH_TABLE_SIZE];
 
 	/**
 		@brief Writes a big-endian uint32_t to a buffer
