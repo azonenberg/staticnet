@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -84,6 +84,10 @@ public:
 	{ m_eth.CancelTxFrame(reinterpret_cast<EthernetFrame*>(reinterpret_cast<uint8_t*>(packet) - ETHERNET_PAYLOAD_OFFSET)); }
 
 	void OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength);
+
+	void OnLinkUp();
+	void OnLinkDown();
+	void OnAgingTick();
 
 	static uint16_t InternetChecksum(uint8_t* data, uint16_t len, uint16_t initial = 0);
 	uint16_t PseudoHeaderChecksum(IPv4Packet* packet, uint16_t length);

@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -225,6 +225,44 @@ void IPv4Protocol::OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Link state changes
+
+/**
+	@brief Called when the link comes up
+ */
+void IPv4Protocol::OnLinkUp()
+{
+	//Send an ARP query for the default gateway
+	auto arp = m_eth.GetARP();
+	if(arp)
+		arp->SendQuery(m_config.m_gateway);
+}
+
+/**
+	@brief Called when the link goes down
+ */
+void IPv4Protocol::OnLinkDown()
+{
+	m_cache.Clear();
+}
+
+/**
+	@brief Called at 1 Hz to handle cache aging
+ */
+void IPv4Protocol::OnAgingTick()
+{
+	auto expiry = m_cache.GetExpiry(m_config.m_gateway);
+
+	//If it expires soon, send a query
+	if(expiry < 15)
+	{
+		auto arp = m_eth.GetARP();
+		if(arp)
+			arp->SendQuery(m_config.m_gateway);
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Handler for outbound packets
 
 /**
@@ -241,8 +279,13 @@ IPv4Packet* IPv4Protocol::GetTxPacket(IPv4Address dest, ipproto_t proto)
 	{
 		if(!m_cache.Lookup(destmac, m_config.m_gateway))
 		{
-			//TODO: send ARP query for this IP so we can try again
-			return NULL;
+			//Send an ARP query for the default gateway
+			auto arp = m_eth.GetARP();
+			if(arp)
+				arp->SendQuery(m_config.m_gateway);
+
+			//But  for now, nothing we can do
+			return nullptr;
 		}
 	}
 
@@ -265,14 +308,17 @@ IPv4Packet* IPv4Protocol::GetTxPacket(IPv4Address dest, ipproto_t proto)
 			case ADDR_UNICAST_OTHER:
 				if(!m_cache.Lookup(destmac, dest))
 				{
-					//TODO: send ARP query for this IP so we can try again
-					return NULL;
+					//Not in ARP cache? Send a query, but nothing we can do right now
+					auto arp = m_eth.GetARP();
+					if(arp)
+						arp->SendQuery(dest);
+					return nullptr;
 				}
 				break;
 
 			//invalid destination (can't send to ourself)
 			default:
-				return NULL;
+				return nullptr;
 		}
 	}
 

@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2024 Andrew D. Zonenberg and contributors                                                              *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -42,6 +42,21 @@ EthernetProtocol::EthernetProtocol(EthernetInterface& iface, MACAddress our_mac)
 	, m_ipv4(nullptr)
 {
 
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Link state changes
+
+void EthernetProtocol::OnLinkUp()
+{
+	if(m_ipv4)
+		m_ipv4->OnLinkUp();
+}
+
+void EthernetProtocol::OnLinkDown()
+{
+	if(m_ipv4)
+		m_ipv4->OnLinkDown();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -141,5 +156,8 @@ EthernetFrame* EthernetProtocol::GetTxFrame(ethertype_t type, const MACAddress& 
 void EthernetProtocol::OnAgingTick()
 {
 	if(m_arp)
+	{
 		m_arp->OnAgingTick();
+		m_ipv4->OnAgingTick();
+	}
 }
