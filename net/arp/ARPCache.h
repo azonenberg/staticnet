@@ -72,6 +72,7 @@ public:
 	ARPCache();
 
 	bool Lookup(MACAddress& mac, IPv4Address ip);
+	bool LookupAndExpiryCheck(MACAddress& mac, IPv4Address ip, uint16_t& expiry);
 	void Insert(MACAddress& mac, IPv4Address ip);
 
 	void OnAgingTick();

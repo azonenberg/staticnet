@@ -272,6 +272,8 @@ void IPv4Protocol::OnAgingTick()
  */
 IPv4Packet* IPv4Protocol::GetTxPacket(IPv4Address dest, ipproto_t proto)
 {
+	auto arp = m_eth.GetARP();
+
 	//Find target MAC address
 	//If not in our subnet, send it to the default gateway
 	MACAddress destmac = {{0, 0, 0, 0, 0, 0}};
@@ -280,7 +282,6 @@ IPv4Packet* IPv4Protocol::GetTxPacket(IPv4Address dest, ipproto_t proto)
 		if(!m_cache.Lookup(destmac, m_config.m_gateway))
 		{
 			//Send an ARP query for the default gateway
-			auto arp = m_eth.GetARP();
 			if(arp)
 				arp->SendQuery(m_config.m_gateway);
 
@@ -293,6 +294,7 @@ IPv4Packet* IPv4Protocol::GetTxPacket(IPv4Address dest, ipproto_t proto)
 	else
 	{
 		auto type = GetAddressType(dest);
+		uint16_t expiry;
 		switch(type)
 		{
 			//TODO: use well known mac for some multicasts
@@ -306,14 +308,22 @@ IPv4Packet* IPv4Protocol::GetTxPacket(IPv4Address dest, ipproto_t proto)
 
 			//Unicast? Check the ARP table
 			case ADDR_UNICAST_OTHER:
-				if(!m_cache.Lookup(destmac, dest))
+
+				//Not in ARP cache? Send a query, but nothing we can do right now
+				if(!m_cache.LookupAndExpiryCheck(destmac, dest, expiry))
 				{
-					//Not in ARP cache? Send a query, but nothing we can do right now
-					auto arp = m_eth.GetARP();
 					if(arp)
 						arp->SendQuery(dest);
 					return nullptr;
 				}
+
+				//In cache, but expiring soon? Send a query to refresh the cache entry
+				else if(expiry < 15)
+				{
+					if(arp)
+						arp->SendQuery(dest);
+				}
+
 				break;
 
 			//invalid destination (can't send to ourself)

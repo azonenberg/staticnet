@@ -78,6 +78,27 @@ bool ARPCache::Lookup(MACAddress& mac, IPv4Address ip)
 }
 
 /**
+	@brief Checks if the ARP cache contains an entry for a given IP, and looks up the corresponding MAC if so
+
+	Also checks for expiration
+ */
+bool ARPCache::LookupAndExpiryCheck(MACAddress& mac, IPv4Address ip, uint16_t& expiry)
+{
+	size_t hash = Hash(ip);
+	for(size_t way=0; way < ARP_CACHE_WAYS; way++)
+	{
+		auto& row = m_ways[way].m_lines[hash];
+		if(row.m_valid && row.m_ip == ip)
+		{
+			mac = row.m_mac;
+			expiry = row.m_lifetime;
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
 	@brief Checks if the ARP cache contains an entry for a given IP, and returns the validity lifetime if so
  */
 uint16_t ARPCache::GetExpiry(IPv4Address ip)
