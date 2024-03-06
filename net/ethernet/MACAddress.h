@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -46,6 +46,18 @@
 class MACAddress
 {
 public:
+
+	/**
+		@brief Constructs a MAC address from raw bytes
+
+		This would be a constructor, except that would make this class non-POD which breaks other stuff
+	 */
+	static MACAddress FromBytes(const uint8_t* rhs)
+	{
+		MACAddress ret;
+		memcpy(ret.m_address, rhs, ETHERNET_MAC_SIZE);
+		return ret;
+	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Comparison operators
