@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -46,6 +46,30 @@ ARPProtocol::ARPProtocol(EthernetProtocol& eth, IPv4Address& ip, ARPCache& cache
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Handler for incoming packets
+
+void ARPProtocol::SendQuery(IPv4Address& ip)
+{
+	//Prepare reply packet
+	auto frame = m_eth.GetTxFrame(ETHERTYPE_ARP, MACAddress{{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}});
+	frame->SetPayloadLength(sizeof(ARPPacket));
+	ARPPacket* query = reinterpret_cast<ARPPacket*>(frame->Payload());
+
+	//Format query packet
+	query->m_htype			= 1;
+	query->m_ptype			= ETHERTYPE_IPV4;
+	query->m_hardwareLen	= ETHERNET_MAC_SIZE;
+	query->m_protoLen		= IPV4_ADDR_SIZE;
+	query->m_oper			= ARP_REQUEST;
+
+	query->m_senderHardwareAddress = m_eth.GetMACAddress();
+	query->m_senderProtocolAddress = m_ip;
+	query->m_targetHardwareAddress = MACAddress{{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+	query->m_targetProtocolAddress = ip;
+
+	//Swap endianness and send
+	query->ByteSwap();
+	m_eth.SendTxFrame(frame);
+}
 
 /**
 	@brief Handle an incoming ARP packet
@@ -118,7 +142,13 @@ void ARPProtocol::OnRequestPacket(ARPPacket* packet)
 /**
 	@brief Handle an incoming ARP reply
  */
-void ARPProtocol::OnReplyPacket(ARPPacket* /*packet*/)
+void ARPProtocol::OnReplyPacket(ARPPacket* packet)
 {
+	//No filtering needed, any ARP packet gets in our table
+
+	//Add entry for sender to our ARP table
+	m_cache.Insert(packet->m_senderHardwareAddress, packet->m_senderProtocolAddress);
+
+	//No reply needed
 }
 

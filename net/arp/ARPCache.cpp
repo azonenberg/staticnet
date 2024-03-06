@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -75,6 +75,21 @@ bool ARPCache::Lookup(MACAddress& mac, IPv4Address ip)
 		}
 	}
 	return false;
+}
+
+/**
+	@brief Checks if the ARP cache contains an entry for a given IP, and returns the validity lifetime if so
+ */
+uint16_t ARPCache::GetExpiry(IPv4Address ip)
+{
+	size_t hash = Hash(ip);
+	for(size_t way=0; way < ARP_CACHE_WAYS; way++)
+	{
+		auto& row = m_ways[way].m_lines[hash];
+		if(row.m_valid && row.m_ip == ip)
+			return row.m_lifetime;
+	}
+	return 0;
 }
 
 /**
@@ -155,5 +170,17 @@ void ARPCache::OnAgingTick()
 					row.m_lifetime --;
 			}
 		}
+	}
+}
+
+/**
+	@brief Marks the entire cache as invalid
+ */
+void ARPCache::Clear()
+{
+	for(size_t i=0; i<ARP_CACHE_WAYS; i++)
+	{
+		for(size_t j=0; j<ARP_CACHE_LINES; j++)
+			m_ways[i].m_lines[j].m_valid = false;
 	}
 }

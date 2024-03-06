@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -46,6 +46,8 @@ class ARPProtocol
 {
 public:
 	ARPProtocol(EthernetProtocol& eth, IPv4Address& ip, ARPCache& cache);
+
+	void SendQuery(IPv4Address& ip);
 
 	void OnRxPacket(ARPPacket* packet);
 

@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -76,6 +76,8 @@ public:
 
 	void OnAgingTick();
 
+	void Clear();
+
 	/**
 		@brief Returns the number of ways in the cache
 	 */
@@ -90,6 +92,8 @@ public:
 
 	const ARPCacheWay* GetWay(uint32_t i)
 	{ return &m_ways[i]; }
+
+	uint16_t GetExpiry(IPv4Address ip);
 
 protected:
 
