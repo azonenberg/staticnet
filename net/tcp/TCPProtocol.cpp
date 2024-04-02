@@ -51,10 +51,10 @@ TCPSegment* TCPProtocol::GetTxSegment(TCPTableEntry* state)
 	//Find first free spot in the list of unacked frames
 	for(size_t i=0; i<TCP_MAX_UNACKED; i++)
 	{
-		if(state->m_unackedFrames[i] == nullptr)
+		if(state->m_unackedFrames[i].m_segment == nullptr)
 		{
 			auto seg = reinterpret_cast<TCPSegment*>(CreateReply(state)->Payload());
-			state->m_unackedFrames[i] = seg;
+			state->m_unackedFrames[i] = TCPSentSegment(seg);
 			return seg;
 		}
 	}
@@ -69,10 +69,10 @@ void TCPProtocol::CancelTxSegment(TCPSegment* segment, TCPTableEntry* state)
 	//Remove the segment from the list of unacked frames
 	for(size_t i=0; i<TCP_MAX_UNACKED; i++)
 	{
-		if(state->m_unackedFrames[i] == segment)
+		if(state->m_unackedFrames[i].m_segment == segment)
 		{
 			//Clear it
-			state->m_unackedFrames[i] = nullptr;
+			state->m_unackedFrames[i].m_segment = nullptr;
 
 			//For now, don't check for subsequent unacked frames
 			//We can only cancel the most recently allocated frame
@@ -82,6 +82,18 @@ void TCPProtocol::CancelTxSegment(TCPSegment* segment, TCPTableEntry* state)
 
 	//Cancel the packet in the upper layer
 	m_ipv4->CancelTxPacket(reinterpret_cast<IPv4Packet*>(reinterpret_cast<uint8_t*>(segment) - sizeof(IPv4Packet)));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Handle aging of packets
+
+/**
+	@brief Called at 10x to determine if we need to retransmit anything
+ */
+void TCPProtocol::OnAgingTick10x()
+{
+	//Go through all open sockets and look to see if we have anything due to retransmit
+	g_log("10 Hz tick\n");
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -239,7 +251,7 @@ void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16
 	LogIndenter li(g_log);
 	for(size_t i=0; i<TCP_MAX_UNACKED; i++)
 	{
-		auto frame = state->m_unackedFrames[i];
+		auto frame = state->m_unackedFrames[i].m_segment;
 		if(!frame)
 			continue;
 
@@ -278,7 +290,7 @@ void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16
 		LogIndenter li(g_log);
 
 		auto frame = state->m_unackedFrames[i];
-		if(!frame)
+		if(!frame.m_segment)
 			continue;
 
 		//Move the frame to the earliest unused slot in the list
@@ -482,7 +494,7 @@ void TCPProtocol::OnConnectionClosed(TCPTableEntry* state)
 {
 	for(size_t i=0; i<TCP_MAX_UNACKED; i++)
 	{
-		auto frame = state->m_unackedFrames[i];
+		auto frame = state->m_unackedFrames[i].m_segment;
 		if(!frame)
 			continue;
 
@@ -491,7 +503,7 @@ void TCPProtocol::OnConnectionClosed(TCPTableEntry* state)
 		m_ipv4->CancelTxPacket(v4);
 
 		//It's no longer in the list of un-acked frames
-		state->m_unackedFrames[i] = nullptr;
+		state->m_unackedFrames[i].m_segment = nullptr;
 	}
 }
 

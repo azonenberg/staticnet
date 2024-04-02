@@ -262,6 +262,16 @@ void IPv4Protocol::OnAgingTick()
 	}
 }
 
+/**
+	@brief Called at 10 Hz to handle retransmit aging
+ */
+void IPv4Protocol::OnAgingTick10x()
+{
+	//Check the TCP stack for anything we might have to retransmit etc
+	if(m_tcp)
+		m_tcp->OnAgingTick10x();
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Handler for outbound packets
 

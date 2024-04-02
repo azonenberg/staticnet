@@ -158,6 +158,18 @@ void EthernetProtocol::OnAgingTick()
 	if(m_arp)
 	{
 		m_arp->OnAgingTick();
-		m_ipv4->OnAgingTick();
+		if(m_ipv4)
+			m_ipv4->OnAgingTick();
 	}
+}
+
+/**
+	@brief Timer handler for TCP retransmits etc
+
+	Call this function at approximately 10 Hz.
+ */
+void EthernetProtocol::OnAgingTick10x()
+{
+	if(m_ipv4)
+		m_ipv4->OnAgingTick10x();
 }

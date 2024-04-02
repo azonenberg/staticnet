@@ -41,6 +41,18 @@
 #define TCP_MAX_UNACKED 4
 #endif
 
+class TCPSentSegment
+{
+public:
+	TCPSentSegment(TCPSegment* seg = nullptr)
+	: m_segment(seg)
+	, m_agingTicks(0)
+	{}
+
+	TCPSegment* m_segment;
+	uint32_t m_agingTicks;
+};
+
 /**
 	@brief A single entry in the TCP socket table
  */
@@ -68,10 +80,10 @@ public:
 	///@brief Most recent sequence number we sent
 	uint32_t m_localSeq;
 
-	//TODO: aging
+	//TODO: aging for session idle closure
 
 	///@brief List of frames that have been sent but not ACKed
-	TCPSegment* m_unackedFrames[TCP_MAX_UNACKED];
+	TCPSentSegment m_unackedFrames[TCP_MAX_UNACKED];
 };
 
 /**
@@ -99,6 +111,8 @@ public:
 		uint16_t ipPayloadLength,
 		IPv4Address sourceAddress,
 		uint16_t pseudoHeaderChecksum);
+
+	void OnAgingTick10x();
 
 	TCPSegment* GetTxSegment(TCPTableEntry* state);
 

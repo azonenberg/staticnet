@@ -77,6 +77,7 @@ public:
 	{ return m_mac; }
 
 	void OnAgingTick();
+	void OnAgingTick10x();
 
 	void OnLinkUp();
 	void OnLinkDown();

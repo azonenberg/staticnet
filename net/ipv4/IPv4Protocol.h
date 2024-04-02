@@ -88,6 +88,7 @@ public:
 	void OnLinkUp();
 	void OnLinkDown();
 	void OnAgingTick();
+	void OnAgingTick10x();
 
 	static uint16_t InternetChecksum(uint8_t* data, uint16_t len, uint16_t initial = 0);
 	uint16_t PseudoHeaderChecksum(IPv4Packet* packet, uint16_t length);
