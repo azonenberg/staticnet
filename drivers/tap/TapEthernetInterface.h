@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -46,11 +46,11 @@ public:
 	TapEthernetInterface(const char* name);
 	virtual ~TapEthernetInterface();
 
-	virtual EthernetFrame* GetTxFrame();
-	virtual void SendTxFrame(EthernetFrame* frame);
-	virtual void CancelTxFrame(EthernetFrame* frame);
-	virtual EthernetFrame* GetRxFrame();
-	virtual void ReleaseRxFrame(EthernetFrame* frame);
+	virtual EthernetFrame* GetTxFrame() override;
+	virtual void SendTxFrame(EthernetFrame* frame) override;
+	virtual void CancelTxFrame(EthernetFrame* frame) override;
+	virtual EthernetFrame* GetRxFrame() override;
+	virtual void ReleaseRxFrame(EthernetFrame* frame) override;
 
 protected:
 	int m_hTun;
