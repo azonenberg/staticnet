@@ -49,7 +49,7 @@ public:
 	virtual ~STM32EthernetInterface();
 
 	virtual EthernetFrame* GetTxFrame() override;
-	virtual void SendTxFrame(EthernetFrame* frame) override;
+	virtual void SendTxFrame(EthernetFrame* frame, bool markFree=true) override;
 	virtual void CancelTxFrame(EthernetFrame* frame) override;
 	virtual EthernetFrame* GetRxFrame() override;
 	virtual void ReleaseRxFrame(EthernetFrame* frame) override;

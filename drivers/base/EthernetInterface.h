@@ -60,10 +60,14 @@ public:
 	/**
 		@brief Sends a frame.
 
-		Ownership of the frame memory is transferred to the interface object, which may free it or return it to a DMA
-		queue depending on the implementation.
+		If markFree is true, ownership of the frame memory is immediately transferred to the interface object, which
+		may free it or return it to a DMA queue depending on the implementation. This is normally used for UDP, ICMP,
+		and other protocols which do not need to retransmit frames that are dropped.
+
+		If markFree is false, the caller retains ownership of the frame and is responsible for calling CancelTxFrame()
+		on it in the future (e.g. when a TCP ACK is received).
 	 */
-	virtual void SendTxFrame(EthernetFrame* frame) =0;
+	virtual void SendTxFrame(EthernetFrame* frame, bool markFree=true) =0;
 
 	/**
 		@brief Cancels sending of an outbound frame.

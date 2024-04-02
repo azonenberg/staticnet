@@ -93,10 +93,12 @@ EthernetFrame* TapEthernetInterface::GetTxFrame()
 	return new EthernetFrame;
 }
 
-void TapEthernetInterface::SendTxFrame(EthernetFrame* frame)
+void TapEthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 {
 	write(m_hTun, frame->RawData(), frame->Length());
-	delete frame;
+
+	if(markFree)
+		delete frame;
 }
 
 void TapEthernetInterface::CancelTxFrame(EthernetFrame* frame)

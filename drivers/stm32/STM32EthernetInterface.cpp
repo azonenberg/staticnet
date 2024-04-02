@@ -165,7 +165,7 @@ bool STM32EthernetInterface::CheckForFinishedFrames()
 	return false;
 }
 
-void STM32EthernetInterface::SendTxFrame(EthernetFrame* frame)
+void STM32EthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 {
 	//If the descriptor is still busy, block until one frees up
 	//TODO: save the frame somewhere
@@ -198,6 +198,13 @@ void STM32EthernetInterface::SendTxFrame(EthernetFrame* frame)
 	m_nextTxDescriptorWrite = (m_nextTxDescriptorWrite + 1) % 4;
 
 	//Don't put on free list until DMA is done
+
+	//TODO: support delayed free
+	if(!markFree)
+	{
+		while(1)
+		{}
+	}
 }
 
 void STM32EthernetInterface::CancelTxFrame(EthernetFrame* frame)
