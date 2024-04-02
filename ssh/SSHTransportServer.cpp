@@ -206,8 +206,10 @@ void SSHTransportServer::SendSessionData(int id, TCPTableEntry* socket, const ch
 	if(length > 1024)
 		return;
 
-	//Close our channel
+	//Send the data
 	auto segment = m_tcp.GetTxSegment(socket);
+	if(!segment)
+		return;
 	auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 	reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_DATA;
 	auto dat = reinterpret_cast<SSHChannelDataPacket*>(reply->Payload());
@@ -953,6 +955,8 @@ void SSHTransportServer::OnRxChannelRequest(int id, TCPTableEntry* socket, SSHTr
 		if(payload->WantReply())
 		{
 			auto segment = m_tcp.GetTxSegment(socket);
+			if(!segment)
+				return;	//TODO: fail without ACKing?
 			auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 			reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_FAILURE;
 			auto fail = reinterpret_cast<SSHChannelStatusPacket*>(reply->Payload());
@@ -967,6 +971,8 @@ void SSHTransportServer::OnRxChannelRequest(int id, TCPTableEntry* socket, SSHTr
 	if(payload->WantReply())
 	{
 		auto segment = m_tcp.GetTxSegment(socket);
+		if(!segment)
+			return;	//TODO: fail without ACKing?
 		auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 		reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_SUCCESS;
 		auto success = reinterpret_cast<SSHChannelStatusPacket*>(reply->Payload());
