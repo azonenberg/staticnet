@@ -30,12 +30,58 @@
 #include <staticnet-config.h>
 #include <staticnet/stack/staticnet.h>
 
+/////DEBUG
+#include <stm32.h>
+#include <util/Logger.h>
+extern Logger g_log;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
 
 TCPProtocol::TCPProtocol(IPv4Protocol* ipv4)
 	: m_ipv4(ipv4)
 {
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Initialization
+
+TCPSegment* TCPProtocol::GetTxSegment(TCPTableEntry* state)
+{
+	//Find first free spot in the list of unacked frames
+	for(size_t i=0; i<TCP_MAX_UNACKED; i++)
+	{
+		if(state->m_unackedFrames[i] == nullptr)
+		{
+			auto seg = reinterpret_cast<TCPSegment*>(CreateReply(state)->Payload());
+			state->m_unackedFrames[i] = seg;
+			return seg;
+		}
+	}
+
+	//None free, can't allocate a frame
+	g_log("No free segments in unacked list, can't allocate\n");
+	return nullptr;
+}
+
+void TCPProtocol::CancelTxSegment(TCPSegment* segment, TCPTableEntry* state)
+{
+	//Remove the segment from the list of unacked frames
+	for(size_t i=0; i<TCP_MAX_UNACKED; i++)
+	{
+		if(state->m_unackedFrames[i] == segment)
+		{
+			//Clear it
+			state->m_unackedFrames[i] = nullptr;
+
+			//For now, don't check for subsequent unacked frames
+			//We can only cancel the most recently allocated frame
+			break;
+		}
+	}
+
+	//Cancel the packet in the upper layer
+	m_ipv4->CancelTxPacket(reinterpret_cast<IPv4Packet*>(reinterpret_cast<uint8_t*>(segment) - sizeof(IPv4Packet)));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -187,12 +233,64 @@ void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16
 		return;
 
 	//If we get here, it's the next packet in line.
-	//TODO: Check its ACK number and mark any segments we sent with smaller ACK numbers as OK
+
+	//Remove the segment from the list of unacked frames
+	g_log("Got ACK for %08x\n", segment->m_ack);
+	LogIndenter li(g_log);
+	for(size_t i=0; i<TCP_MAX_UNACKED; i++)
+	{
+		auto frame = state->m_unackedFrames[i];
+		if(!frame)
+			continue;
+
+		//Get the sequence number of the frame (already in network byte order so have to munge a bit)
+		auto seq = __builtin_bswap32(frame->m_sequence);
+		//auto end = ack + __builtin_bswap32(frame->m_sequence);
+		auto v4 = reinterpret_cast<IPv4Packet*>(reinterpret_cast<uint8_t*>(frame) - sizeof(IPv4Packet));
+		auto ipPayloadLength = __builtin_bswap16(v4->m_totalLength) - 20;
+		auto segmentLength = ipPayloadLength - 20;
+		auto endSeq = seq + segmentLength;
+		g_log("Pending frame %d has seq %08x and length %d (ending seq %08x)\n", i, seq, segmentLength, endSeq);
+		LogIndenter li2(g_log);
+
+		//If ACK number is >= the end of the frame, we can clear it
+		if(segment->m_ack >= endSeq)
+		{
+			g_log("Frame %08x is ACKed, we can clear it\n", frame);
+
+			//Remove the segment from the list of unacked frames
+			state->m_unackedFrames[i] = nullptr;
+
+			//Free it in the upper layer
+			m_ipv4->CancelTxPacket(v4);
+		}
+		else
+		{
+			g_log("Not yet ACKed\n");
+			break;
+		}
+	}
+
+	//Clear empty slots in the list of unacked frames
+	size_t iwrite = 0;
+	for(size_t i=0; i<TCP_MAX_UNACKED; i++)
+	{
+		LogIndenter li(g_log);
+
+		auto frame = state->m_unackedFrames[i];
+		if(!frame)
+			continue;
+
+		//Move the frame to the earliest unused slot in the list
+		state->m_unackedFrames[i] = nullptr;
+		state->m_unackedFrames[iwrite] = frame;
+		iwrite ++;
+	}
 
 	//Process the data
 	if(payloadLen > 0)
 	{
-		//If
+		//Bail if the upper layer can't handle it
 		if(!OnRxData(state, segment->Payload(), payloadLen))
 			return;
 	}
@@ -378,10 +476,23 @@ void TCPProtocol::OnConnectionAccepted(TCPTableEntry* /*state*/)
 
 	Override to destroy application-layer state when a connection is no longer active.
 
-	The default implementation does nothing.
+	The default implementation frees all un-ACKed socket buffers and must be called by any overrides.
  */
-void TCPProtocol::OnConnectionClosed(TCPTableEntry* /*state*/)
+void TCPProtocol::OnConnectionClosed(TCPTableEntry* state)
 {
+	for(size_t i=0; i<TCP_MAX_UNACKED; i++)
+	{
+		auto frame = state->m_unackedFrames[i];
+		if(!frame)
+			continue;
+
+		//Free the frame
+		auto v4 = reinterpret_cast<IPv4Packet*>(reinterpret_cast<uint8_t*>(frame) - sizeof(IPv4Packet));
+		m_ipv4->CancelTxPacket(v4);
+
+		//It's no longer in the list of un-acked frames
+		state->m_unackedFrames[i] = nullptr;
+	}
 }
 
 /**
@@ -392,18 +503,6 @@ void TCPProtocol::OnConnectionClosed(TCPTableEntry* /*state*/)
 bool TCPProtocol::IsPortOpen(uint16_t /*port*/)
 {
 	return true;
-}
-
-/**
-	@brief Generates a random initial sequence number for a new socket.
-
-	This should be overridden in derived classes to use the best randomness available (hardware RNG etc).
- */
-uint32_t TCPProtocol::GenerateInitialSequenceNumber()
-{
-	//generated by fair dice roll
-	//guaranteed to be random
-	return 4;
 }
 
 /**

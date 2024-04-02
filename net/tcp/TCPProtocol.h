@@ -37,6 +37,10 @@
 
 #include "TCPSegment.h"
 
+#ifndef TCP_MAX_UNACKED
+#define TCP_MAX_UNACKED 4
+#endif
+
 /**
 	@brief A single entry in the TCP socket table
  */
@@ -45,7 +49,9 @@ class TCPTableEntry
 public:
 	TCPTableEntry()
 	: m_valid(false)
-	{}
+	{
+		memset(m_unackedFrames, 0, sizeof(m_unackedFrames));
+	}
 
 	bool m_valid;
 	IPv4Address m_remoteIP;
@@ -63,6 +69,9 @@ public:
 	uint32_t m_localSeq;
 
 	//TODO: aging
+
+	///@brief List of frames that have been sent but not ACKed
+	TCPSegment* m_unackedFrames[TCP_MAX_UNACKED];
 };
 
 /**
@@ -91,8 +100,7 @@ public:
 		IPv4Address sourceAddress,
 		uint16_t pseudoHeaderChecksum);
 
-	TCPSegment* GetTxSegment(TCPTableEntry* state)
-	{ return reinterpret_cast<TCPSegment*>(CreateReply(state)->Payload()); }
+	TCPSegment* GetTxSegment(TCPTableEntry* state);
 
 	/**
 		@brief Sends a TCP segment on a given socket handle
@@ -111,15 +119,21 @@ public:
 	}
 
 	///@brief Cancels sending of a packet
-	void CancelTxSegment(TCPSegment* segment)
-	{ m_ipv4->CancelTxPacket(reinterpret_cast<IPv4Packet*>(reinterpret_cast<uint8_t*>(segment) - sizeof(IPv4Packet))); }
+	void CancelTxSegment(TCPSegment* segment, TCPTableEntry* state);
 
 	///@brief Close a socket from the server side
 	void CloseSocket(TCPTableEntry* state);
 
 protected:
 	virtual bool IsPortOpen(uint16_t port);
-	virtual uint32_t GenerateInitialSequenceNumber();
+
+	/**
+		@brief Generates a random initial sequence number for a new socket.
+
+		This should be overridden in derived classes to use the best randomness available (hardware RNG etc).
+	 */
+	virtual uint32_t GenerateInitialSequenceNumber() =0;
+
 	virtual bool OnRxData(TCPTableEntry* state, uint8_t* payload, uint16_t payloadLen);
 	virtual void OnConnectionAccepted(TCPTableEntry* state);
 	virtual void OnConnectionClosed(TCPTableEntry* state);
