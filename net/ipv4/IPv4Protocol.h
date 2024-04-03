@@ -77,7 +77,8 @@ public:
 	};
 
 	IPv4Packet* GetTxPacket(IPv4Address dest, ipproto_t proto);
-	void SendTxPacket(IPv4Packet* packet, size_t upperLayerLength);
+	void SendTxPacket(IPv4Packet* packet, size_t upperLayerLength, bool markFree = true);
+	void ResendTxPacket(IPv4Packet* packet, bool markFree = false);
 
 	///@brief Cancels sending of a packet
 	void CancelTxPacket(IPv4Packet* packet)

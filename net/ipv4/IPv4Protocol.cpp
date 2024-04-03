@@ -344,6 +344,9 @@ IPv4Packet* IPv4Protocol::GetTxPacket(IPv4Address dest, ipproto_t proto)
 
 	//Allocate the frame and fill headers
 	auto frame = m_eth.GetTxFrame(ETHERTYPE_IPV4, destmac);
+	if(!frame)
+		return nullptr;
+
 	auto reply = reinterpret_cast<IPv4Packet*>(frame->Payload());
 	reply->m_versionAndHeaderLen = 0x45;
 	reply->m_dscpAndECN = 0;
@@ -365,7 +368,7 @@ IPv4Packet* IPv4Protocol::GetTxPacket(IPv4Address dest, ipproto_t proto)
 
 	The packet MUST have been allocated by GetTxPacket().
  */
-void IPv4Protocol::SendTxPacket(IPv4Packet* packet, size_t upperLayerLength)
+void IPv4Protocol::SendTxPacket(IPv4Packet* packet, size_t upperLayerLength, bool markFree)
 {
 	//Get the full frame given the packet
 	//TODO: handle VLAN tagging?
@@ -378,5 +381,18 @@ void IPv4Protocol::SendTxPacket(IPv4Packet* packet, size_t upperLayerLength)
 	//Final fixup of checksum and byte ordering before sending it out
 	packet->ByteSwap();
 	packet->m_headerChecksum = ~__builtin_bswap16(InternetChecksum(reinterpret_cast<uint8_t*>(packet), 20));
-	m_eth.SendTxFrame(frame);
+	m_eth.SendTxFrame(frame, markFree);
+}
+
+/**
+	@brief Re-sends a packet without touching the checksums or doing any byte swapping etc
+ */
+void IPv4Protocol::ResendTxPacket(IPv4Packet* packet, bool markFree)
+{
+	//Get the full frame given the packet
+	//TODO: handle VLAN tagging?
+	auto frame = reinterpret_cast<EthernetFrame*>(reinterpret_cast<uint8_t*>(packet) - ETHERNET_PAYLOAD_OFFSET);
+
+	//Send it
+	m_eth.ResendTxFrame(frame, markFree);
 }

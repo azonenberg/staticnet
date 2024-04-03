@@ -55,11 +55,15 @@ public:
 	EthernetFrame* GetTxFrame(ethertype_t type, const MACAddress& dest);
 
 	///@brief Sends a frame to the driver
-	void SendTxFrame(EthernetFrame* frame)
+	void SendTxFrame(EthernetFrame* frame, bool markFree = true)
 	{
 		frame->ByteSwap();
-		m_iface.SendTxFrame(frame);
+		m_iface.SendTxFrame(frame, markFree);
 	}
+
+	///@brief Sends a frame to the driver as-is (previously sent)
+	void ResendTxFrame(EthernetFrame* frame, bool markFree = true)
+	{ m_iface.SendTxFrame(frame, markFree); }
 
 	///@brief Cancels sending of a frame
 	void CancelTxFrame(EthernetFrame* frame)

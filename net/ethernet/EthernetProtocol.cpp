@@ -135,6 +135,8 @@ EthernetFrame* EthernetProtocol::GetTxFrame(ethertype_t type, const MACAddress& 
 {
 	//Allocate a new frame from the transmit driver
 	auto frame = m_iface.GetTxFrame();
+	if(!frame)
+		return nullptr;
 
 	//Fill in header fields (no VLAN tag support for now)
 	frame->DstMAC() = dest;
