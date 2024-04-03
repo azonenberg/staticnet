@@ -323,17 +323,16 @@ void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16
 	//Process the data
 	if(payloadLen > 0)
 	{
-		//Bail if the upper layer can't handle it
-		if(!OnRxData(state, segment->Payload(), payloadLen))
-			return;
+		//Update our ACK number to the end of this segment
+		state->m_remoteSeq += payloadLen;
+
+		//Call the RX data handler
+		OnRxData(state, segment->Payload(), payloadLen);
 	}
 
 	//If no data, and not a FIN, no action needed (duplicate ACK?)
 	else if( (segment->m_offsetAndFlags & TCPSegment::FLAG_FIN) == 0)
 		return;
-
-	//Update our ACK number to the end of this segment
-	state->m_remoteSeq += payloadLen;
 
 	//Send our reply
 	auto reply = CreateReply(state);
@@ -559,17 +558,8 @@ bool TCPProtocol::IsPortOpen(uint16_t /*port*/)
 /**
 	@brief Handles incoming packet data.
 
-	Return true to send an ACK if everything went smoothly.
-
-	Return false if there was insufficient memory or the packet could not be processed at this time. The stack will
-	drop the packet and the sender will retransmit in the future.
-
-	The default implementation does nothing and always returns true.
-
-	@return		True if the data was processed successfully
-				False if the data could not be processed
+	The default implementation does nothing.
  */
-bool TCPProtocol::OnRxData(TCPTableEntry* /*state*/, uint8_t* /*payload*/, uint16_t /*payloadLen*/)
+void TCPProtocol::OnRxData(TCPTableEntry* /*state*/, uint8_t* /*payload*/, uint16_t /*payloadLen*/)
 {
-	return true;
 }
