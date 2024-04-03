@@ -119,6 +119,8 @@ void ARPProtocol::OnRequestPacket(ARPPacket* packet)
 
 	//Prepare reply packet
 	auto frame = m_eth.GetTxFrame(ETHERTYPE_ARP, packet->m_senderHardwareAddress);
+	if(!frame)
+		return;
 	frame->SetPayloadLength(sizeof(ARPPacket));
 	ARPPacket* reply = reinterpret_cast<ARPPacket*>(frame->Payload());
 
