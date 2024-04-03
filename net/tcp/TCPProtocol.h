@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -37,8 +37,13 @@
 
 #include "TCPSegment.h"
 
+//Default of 4 pending TCP segments allowed in flight
 #ifndef TCP_MAX_UNACKED
 #define TCP_MAX_UNACKED 4
+#endif
+
+#ifndef TCP_RETRANSMIT_TIMEOUT
+#define TCP_RETRANSMIT_TIMEOUT 2
 #endif
 
 class TCPSentSegment
@@ -129,7 +134,7 @@ public:
 		segment->m_offsetAndFlags |= TCPSegment::FLAG_PSH;
 
 		//Reay to send
-		SendSegment(segment, packet, payloadLength + sizeof(TCPSegment));
+		SendSegment(state, segment, packet, payloadLength + sizeof(TCPSegment));
 	}
 
 	///@brief Cancels sending of a packet
@@ -163,7 +168,7 @@ protected:
 	TCPTableEntry* GetSocketState(IPv4Address ip, uint16_t localPort, uint16_t remotePort);
 	IPv4Packet* CreateReply(TCPTableEntry* state);
 
-	void SendSegment(TCPSegment* segment, IPv4Packet* packet, uint16_t length = sizeof(TCPSegment));
+	void SendSegment(TCPTableEntry* state, TCPSegment* segment, IPv4Packet* packet, uint16_t length = sizeof(TCPSegment));
 
 	///@brief The IPv4 protocol stack
 	IPv4Protocol* m_ipv4;

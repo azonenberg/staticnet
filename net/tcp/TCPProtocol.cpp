@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021-2023 Andrew D. Zonenberg and contributors                                                         *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -30,11 +30,6 @@
 #include <staticnet-config.h>
 #include <staticnet/stack/staticnet.h>
 
-/////DEBUG
-#include <stm32.h>
-#include <util/Logger.h>
-extern Logger g_log;
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
 
@@ -48,20 +43,26 @@ TCPProtocol::TCPProtocol(IPv4Protocol* ipv4)
 
 TCPSegment* TCPProtocol::GetTxSegment(TCPTableEntry* state)
 {
-	//Find first free spot in the list of unacked frames
+	//Make sure we have space in the outbox for it
+	bool ok = false;
 	for(size_t i=0; i<TCP_MAX_UNACKED; i++)
 	{
 		if(state->m_unackedFrames[i].m_segment == nullptr)
 		{
-			auto seg = reinterpret_cast<TCPSegment*>(CreateReply(state)->Payload());
-			state->m_unackedFrames[i] = TCPSentSegment(seg);
-			return seg;
+			ok = true;
+			break;
 		}
 	}
+	if(!ok)
+		return nullptr;
 
-	//None free, can't allocate a frame
-	g_log("No free segments in unacked list, can't allocate\n");
-	return nullptr;
+	//Allocate the frame and fail if we couldn't allocate one
+	auto reply = CreateReply(state);
+	if(!reply)
+		return nullptr;
+
+	//All good, allocate the reply
+	return reinterpret_cast<TCPSegment*>(reply->Payload());
 }
 
 void TCPProtocol::CancelTxSegment(TCPSegment* segment, TCPTableEntry* state)
@@ -93,7 +94,32 @@ void TCPProtocol::CancelTxSegment(TCPSegment* segment, TCPTableEntry* state)
 void TCPProtocol::OnAgingTick10x()
 {
 	//Go through all open sockets and look to see if we have anything due to retransmit
-	g_log("10 Hz tick\n");
+	for(size_t way=0; way<TCP_TABLE_WAYS; way++)
+	{
+		for(size_t line=0; line<TCP_TABLE_LINES; line++)
+		{
+			auto& sock = m_socketTable[way].m_lines[line];
+
+			//Age all of our queued frames
+			for(size_t i=0; i<TCP_MAX_UNACKED; i++)
+			{
+				auto& f = sock.m_unackedFrames[i];
+				if(!f.m_segment)
+					continue;
+
+				//Valid frame, age it
+				f.m_agingTicks ++;
+
+				//Segment has aged out, resend it
+				if(f.m_agingTicks >= TCP_RETRANSMIT_TIMEOUT)
+				{
+					f.m_agingTicks = 0;
+					m_ipv4->ResendTxPacket(reinterpret_cast<IPv4Packet*>(
+						reinterpret_cast<uint8_t*>(f.m_segment) - sizeof(IPv4Packet)));
+				}
+			}
+		}
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -167,7 +193,7 @@ void TCPProtocol::OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress)
 		payload->m_urgent = 0;
 
 		//Done
-		SendSegment(payload, reply);
+		SendSegment(nullptr, payload, reply);
 		return;
 	}
 
@@ -198,7 +224,7 @@ void TCPProtocol::OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress)
 	payload->m_offsetAndFlags |= TCPSegment::FLAG_SYN;
 
 	//Send it
-	SendSegment(payload, reply);
+	SendSegment(state, payload, reply);
 
 	//The SYN flag counts as a byte in the stream, so we expect the next ACK to be one greater than what we sent
 	state->m_localSeq ++;
@@ -239,16 +265,20 @@ void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16
 
 	//If remote sequence number is too BIG: we missed a packet, this is the next one in line.
 	//If too SMALL: this is a duplicate packet.
-	//In either case, we don't need to do anything.
-	//TODO: Send an ACK for the last packet we *did* get?
+	//Send an ACK for the last packet we *did* get
 	if(state->m_remoteSeq != segment->m_sequence)
+	{
+		auto reply = CreateReply(state);
+		if(!reply)
+			return;
+		auto payload = reinterpret_cast<TCPSegment*>(reply->Payload());
+		SendSegment(state, payload, reply);
 		return;
+	}
 
 	//If we get here, it's the next packet in line.
 
 	//Remove the segment from the list of unacked frames
-	g_log("Got ACK for %08x\n", segment->m_ack);
-	LogIndenter li(g_log);
 	for(size_t i=0; i<TCP_MAX_UNACKED; i++)
 	{
 		auto frame = state->m_unackedFrames[i].m_segment;
@@ -262,33 +292,24 @@ void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16
 		auto ipPayloadLength = __builtin_bswap16(v4->m_totalLength) - 20;
 		auto segmentLength = ipPayloadLength - 20;
 		auto endSeq = seq + segmentLength;
-		g_log("Pending frame %d has seq %08x and length %d (ending seq %08x)\n", i, seq, segmentLength, endSeq);
-		LogIndenter li2(g_log);
 
 		//If ACK number is >= the end of the frame, we can clear it
 		if(segment->m_ack >= endSeq)
 		{
-			g_log("Frame %08x is ACKed, we can clear it\n", frame);
-
 			//Remove the segment from the list of unacked frames
-			state->m_unackedFrames[i] = nullptr;
+			state->m_unackedFrames[i].m_segment = nullptr;
 
 			//Free it in the upper layer
 			m_ipv4->CancelTxPacket(v4);
 		}
 		else
-		{
-			g_log("Not yet ACKed\n");
 			break;
-		}
 	}
 
 	//Clear empty slots in the list of unacked frames
 	size_t iwrite = 0;
 	for(size_t i=0; i<TCP_MAX_UNACKED; i++)
 	{
-		LogIndenter li(g_log);
-
 		auto frame = state->m_unackedFrames[i];
 		if(!frame.m_segment)
 			continue;
@@ -333,7 +354,7 @@ void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16
 		//Normally we'd go to TIME-WAIT but just close it right away so we can reuse the table entry.
 		state->m_valid = false;
 	}
-	SendSegment(payload, reply);
+	SendSegment(state, payload, reply);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -342,7 +363,7 @@ void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16
 /**
 	@brief Does final prep and sends a TCP segment
  */
-void TCPProtocol::SendSegment(TCPSegment* segment, IPv4Packet* packet, uint16_t length)
+void TCPProtocol::SendSegment(TCPTableEntry* state, TCPSegment* segment, IPv4Packet* packet, uint16_t length)
 {
 	//Calculate the pseudoheader checksum
 	auto pseudoHeaderChecksum = m_ipv4->PseudoHeaderChecksum(packet, length);
@@ -352,7 +373,25 @@ void TCPProtocol::SendSegment(TCPSegment* segment, IPv4Packet* packet, uint16_t 
 	segment->m_checksum = ~__builtin_bswap16(
 		IPv4Protocol::InternetChecksum(reinterpret_cast<uint8_t*>(segment), length, pseudoHeaderChecksum));
 
-	m_ipv4->SendTxPacket(packet, length);
+	//Put it in the transmit queue if the frame has content (don't worry about retransmitting ACKs)
+	//Find first free spot in the list of unacked frames
+	//(state may be null if we're sending a RST in response to a closed port)
+	bool inQueue = false;
+	if(state && (length > sizeof(TCPSegment) ))
+	{
+		for(size_t i=0; i<TCP_MAX_UNACKED; i++)
+		{
+			if(state->m_unackedFrames[i].m_segment == nullptr)
+			{
+				state->m_unackedFrames[i] = TCPSentSegment(segment);
+				inQueue = true;
+				break;
+			}
+			//TODO: don't allow sending the frame if no space to queue it?
+		}
+	}
+
+	m_ipv4->SendTxPacket(packet, length, !inQueue);
 }
 
 /**
@@ -390,7 +429,7 @@ void TCPProtocol::CloseSocket(TCPTableEntry* state)
 	payload->m_offsetAndFlags |= TCPSegment::FLAG_FIN;
 
 	//Send it
-	SendSegment(payload, reply);
+	SendSegment(state, payload, reply);
 
 	//The FIN flag counts as a byte in the stream, so we expect the next ACK to be one greater than what we sent
 	state->m_localSeq ++;
