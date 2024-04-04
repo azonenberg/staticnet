@@ -12,8 +12,6 @@
 #define FOR(i,n) for (i = 0;i < n;++i)
 #define sv static void
 
-static int unpackneg(gf r[4],const u8 p[32]);
-
 static const u8
   _0[16] = {0},
   _9[32] = {9};
@@ -342,7 +340,7 @@ int crypto_hash(u8 *out,const u8 *m,u64 n)
   return 0;
 }
 
-sv add(gf p[4],gf q[4])
+void add(gf p[4],gf q[4])
 {
   gf a,b,c,d,t,e,f,g,h;
 
@@ -374,7 +372,7 @@ sv cswap(gf p[4],gf q[4],u8 b)
     sel25519(p[i],q[i],b);
 }
 
-sv pack(u8 *r,gf p[4])
+void pack(u8 *r,gf p[4])
 {
   gf tx, ty, zi;
   inv25519(zi, p[2]);
@@ -384,7 +382,7 @@ sv pack(u8 *r,gf p[4])
   r[31] ^= par25519(tx) << 7;
 }
 
-sv scalarmult(gf p[4],gf q[4],const u8 *s)
+void scalarmult(gf p[4],gf q[4],const u8 *s)
 {
   int i;
   set25519(p[0],gf0);
@@ -400,7 +398,7 @@ sv scalarmult(gf p[4],gf q[4],const u8 *s)
   }
 }
 
-sv scalarbase(gf p[4],const u8 *s)
+void scalarbase(gf p[4],const u8 *s)
 {
   gf q[4];
   set25519(q[0],X);
@@ -438,7 +436,7 @@ sv modL(u8 *r,i64 x[64])
   }
 }
 
-sv reduce(u8 *r)
+void reduce(u8 *r)
 {
   i64 x[64],i;
   FOR(i,64) x[i] = (u64) r[i];
@@ -468,14 +466,13 @@ int crypto_sign_open(u8 *m,const u8 *sm,u64 n,const u8 *pk)
   add(p,q);
   pack(t,p);
 
-  n -= 64;
   if (crypto_verify_32(sm, t))
     return -1;
 
   return 0;
 }
 
-static int unpackneg(gf r[4],const u8 p[32])
+int unpackneg(gf r[4],const u8 p[32])
 {
   gf t, chk, num, den, den2, den4, den6;
   set25519(r[2],gf1);

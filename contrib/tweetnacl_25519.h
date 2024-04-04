@@ -25,4 +25,11 @@ int crypto_sign_open(unsigned char *,const unsigned char *,unsigned long long,co
 
 int crypto_sign_keypair(u8 *pk, u8 *sk);
 
+int unpackneg(gf r[4],const u8 p[32]);
+void reduce(u8 *r);
+void scalarmult(gf p[4],gf q[4],const u8 *s);
+void scalarbase(gf p[4],const u8 *s);
+void add(gf p[4],gf q[4]);
+void pack(u8 *r,gf p[4]);
+
 #endif

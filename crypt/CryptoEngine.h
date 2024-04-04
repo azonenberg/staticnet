@@ -39,6 +39,7 @@
 #define ECDH_KEY_SIZE		32
 #define ECDSA_KEY_SIZE		32
 #define SHA256_DIGEST_SIZE	32
+#define SHA512_DIGEST_SIZE	64
 #define AES_BLOCK_SIZE		16
 #define AES_KEY_SIZE		16
 #define GCM_IV_SIZE			12
