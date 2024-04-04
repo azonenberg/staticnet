@@ -133,6 +133,18 @@ public:
 	uint8_t* GetKeyBlobStart()
 	{ return reinterpret_cast<uint8_t*>(GetAlgorithmStart() + GetAlgorithmLength() + sizeof(uint32_t)); }
 
+	/**
+		@brief Gets the length of the signature
+	 */
+	uint32_t GetSignatureLength()
+	{ return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetSignatureStart() - sizeof(uint32_t))); }
+
+	/**
+		@brief Gets a pointer to the start of the signature
+	 */
+	uint8_t* GetSignatureStart()
+	{ return reinterpret_cast<uint8_t*>(GetKeyBlobStart() + GetKeyBlobLength() + sizeof(uint32_t)); }
+
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Field content
 

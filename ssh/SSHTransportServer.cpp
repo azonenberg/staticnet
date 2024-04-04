@@ -47,6 +47,7 @@
 #include "SSHChannelDataPacket.h"
 #include "SSHDisconnectPacket.h"
 #include "SSHCurve25519KeyBlob.h"
+#include "SSHCurve25519SignatureBlob.h"
 
 //Our single supported cipher suite
 static const char* g_sshKexAlg				= "curve25519-sha256";			//RFC 8731
@@ -67,11 +68,6 @@ static const char* g_strSession				= "session";
 static const char* g_strPtyReq				= "pty-req";
 static const char* g_strEnvReq				= "env-req";
 static const char* g_strShellReq			= "shell";
-
-//DEBUG
-#include <stm32.h>
-#include <peripheral/UART.h>
-extern UART* g_cliUART;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
@@ -931,95 +927,192 @@ void SSHTransportServer::OnRxAuthTypePubkey(int id, TCPTableEntry* socket, SSHUs
 		return;
 	}
 
+	//Reject any keys that aren't ssh-ed25519
+	if(!StringMatchWithLength(g_sshUserKeyAlg, alg, alglen))
+	{
+		OnRxAuthFail(id, socket);
+		return;
+	}
+
 	//Extract the key blob itself
-	auto key = req->GetKeyBlobStart();
+	auto keyblob = reinterpret_cast<SSHCurve25519KeyBlob*>(req->GetKeyBlobStart());
 	auto keylen = req->GetKeyBlobLength();
 	if(keylen > 64)
 	{
 		OnRxAuthFail(id, socket);
 		return;
 	}
+	keyblob->ByteSwap();
 
-	if(req->IsActualAuthRequest())
+	//Validate the blob and make sure it is a well-formed ssh-ed25519 key
+	if(keyblob->m_keyTypeLength != nomalglen)
 	{
-		g_cliUART->Printf("Actual auth request\n");
-
-		//TODO: handle this
+		//g_cliUART->Printf("Invalid key type length (not %d)\n", alglen);
+		OnRxAuthFail(id, socket);
+		return;
 	}
-	else
+	if(!StringMatchWithLength(g_sshUserKeyAlg, keyblob->m_keyType, keyblob->m_keyTypeLength))
 	{
-		//If it's a ssh-ed25519 key, for now allow it
-		if(StringMatchWithLength(g_sshUserKeyAlg, alg, alglen))
-		{
-			//Validate the blob and make sure it is a well-formed ssh-ed25519 key
-			auto keyblob = reinterpret_cast<SSHCurve25519KeyBlob*>(key);
-			keyblob->ByteSwap();
-			if(keyblob->m_keyTypeLength != nomalglen)
-			{
-				//g_cliUART->Printf("Invalid key type length (not %d)\n", alglen);
-				OnRxAuthFail(id, socket);
-				return;
-			}
-			if(!StringMatchWithLength(g_sshUserKeyAlg, keyblob->m_keyType, keyblob->m_keyTypeLength))
-			{
-				//g_cliUART->Printf("Invalid key type (not ssh-ed25519)\n");
-				OnRxAuthFail(id, socket);
-				return;
-			}
-			if(keyblob->m_pubKeyLength != 32)
-			{
-				//g_cliUART->Printf("Invalid pubkey length (not 32)\n");
-				OnRxAuthFail(id, socket);
-				return;
-			}
+		//g_cliUART->Printf("Invalid key type (not ssh-ed25519)\n");
+		OnRxAuthFail(id, socket);
+		return;
+	}
+	if(keyblob->m_pubKeyLength != 32)
+	{
+		//g_cliUART->Printf("Invalid pubkey length (not 32)\n");
+		OnRxAuthFail(id, socket);
+		return;
+	}
 
-			//Check against our list of allowed keys
-			if(!m_pubkeyAuth->CanUseKey(uname, ulen, keyblob))
-			{
-				//g_cliUART->Printf("Auth provider rejected key\n");
-				OnRxAuthFail(id, socket);
-				return;
-			}
+	//Check against our list of allowed keys
+	bool actualAuth = req->IsActualAuthRequest();
+	if(!m_pubkeyAuth->CanUseKey(uname, ulen, keyblob, actualAuth))
+	{
+		//g_cliUART->Printf("Auth provider rejected key\n");
+		OnRxAuthFail(id, socket);
+		return;
+	}
 
-			//Report that this key is good
-			keyblob->ByteSwap();
-			auto segment = m_tcp.GetTxSegment(socket);
-			auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
-			packet->m_type = SSHTransportPacket::SSH_MSG_USERAUTH_PK_OK;
-			auto buf = packet->Payload();
+	//Actual authentication
+	if(actualAuth)
+	{
+		//Extract the signature blob
+		auto sigblob = reinterpret_cast<SSHCurve25519SignatureBlob*>(req->GetSignatureStart());
+		auto siglen = req->GetSignatureLength();
+		sigblob->ByteSwap();
 
-			//Send the algorithm name
-			uint32_t alglenSwap = __builtin_bswap32(nomalglen);
-			memcpy(buf, &alglenSwap, sizeof(alglenSwap));
-			memcpy(buf + sizeof(uint32_t), g_sshUserKeyAlg, nomalglen);
-
-			//Send the key blob length
-			uint32_t bloblenSwap = __builtin_bswap32(keylen);
-			uint32_t off = sizeof(uint32_t) + nomalglen;
-			memcpy(buf + off, &bloblenSwap, sizeof(bloblenSwap));
-			off += sizeof(uint32_t);
-
-			//Send the key blob itself
-			memcpy(buf+off, keyblob, keylen);
-			off += keylen;
-
-			//Send it
-			SendEncryptedPacket(id, off, segment, packet, socket);
-		}
-
-		//If not, we don't support it
-		else
+		//Outer signature blob length should be 83 bytes
+		//(4 byte length, 11 byte algorithm name, 4 byte length, 64 byte signature)
+		if(siglen != 83)
 		{
 			OnRxAuthFail(id, socket);
 			return;
 		}
+
+		//Validate the blob and make sure it is a well-formed ssh-ed25519 signature blob
+		if(sigblob->m_keyTypeLength != nomalglen)
+		{
+			OnRxAuthFail(id, socket);
+			return;
+		}
+		if(!StringMatchWithLength(g_sshUserKeyAlg, sigblob->m_keyType, sigblob->m_keyTypeLength))
+		{
+			OnRxAuthFail(id, socket);
+			return;
+		}
+
+		//After the algorithm wrapper we expect the actual signature, 64 bytes in size
+		if(sigblob->m_sigLength != ECDSA_SIG_SIZE)
+		{
+			OnRxAuthFail(id, socket);
+			return;
+		}
+
+		//Format the buffer of data being signed
+		//see RFC4252 page 10
+		unsigned char sigbuf[1024];
+
+		//Add the signature to the end of the message since tweetnacl expects that
+		uint32_t offset = 0;
+		memcpy(sigbuf + offset, sigblob->m_signature, sigblob->m_sigLength);
+		offset += sigblob->m_sigLength;
+
+		//string sessid
+		uint32_t tmplen = __builtin_bswap32(SHA256_DIGEST_SIZE);
+		memcpy(sigbuf+offset, &tmplen, sizeof(tmplen));
+		offset += sizeof(tmplen);
+		memcpy(sigbuf+offset, m_state[id].m_sessionID, SHA256_DIGEST_SIZE);
+		offset += SHA256_DIGEST_SIZE;
+
+		//constant byte
+		sigbuf[offset] = SSHTransportPacket::SSH_MSG_USERAUTH_REQUEST;
+		offset ++;
+
+		//username
+		tmplen = __builtin_bswap32(ulen);
+		memcpy(sigbuf+offset, &tmplen, sizeof(tmplen));
+		offset += sizeof(tmplen);
+		memcpy(sigbuf+offset, uname, ulen);
+		offset += ulen;
+
+		//constant string "ssh-connection"
+		uint32_t alen = strlen(g_strConnection);
+		tmplen = __builtin_bswap32(alen);
+		memcpy(sigbuf+offset, &tmplen, sizeof(tmplen));
+		offset += sizeof(tmplen);
+		memcpy(sigbuf+offset, g_strConnection, alen);
+		offset += alen;
+
+		//constant string "publickey"
+		alen = strlen(g_strAuthMethodPubkey);
+		tmplen = __builtin_bswap32(alen);
+		memcpy(sigbuf+offset, &tmplen, sizeof(tmplen));
+		offset += sizeof(tmplen);
+		memcpy(sigbuf+offset, g_strAuthMethodPubkey, alen);
+		offset += alen;
+
+		//Constant byte
+		sigbuf[offset] = 1;
+		offset ++;
+
+		//Public key algorithm name
+		alen = strlen(g_sshUserKeyAlg);
+		tmplen = __builtin_bswap32(alen);
+		memcpy(sigbuf+offset, &tmplen, sizeof(tmplen));
+		offset += sizeof(tmplen);
+		memcpy(sigbuf+offset, g_sshUserKeyAlg, alen);
+		offset += alen;
+
+		//The public key blob (have to byte swap lengths again)
+		keyblob->ByteSwap();
+		alen = 51;
+		tmplen = __builtin_bswap32(alen);
+		memcpy(sigbuf+offset, &tmplen, sizeof(tmplen));
+		offset += sizeof(tmplen);
+		memcpy(sigbuf+offset, keyblob, alen);
+		offset += alen;
+		keyblob->ByteSwap();
+
+		//If signature didn't check out, tell the client and don't authenticate
+		if(!m_state[id].m_crypto->VerifySignature(sigbuf, offset, keyblob->m_pubKey))
+		{
+			OnRxAuthFail(id, socket);
+			return;
+		}
+
+		//Successful!
+		OnRxAuthSuccess(id, uname, ulen, socket);
+		m_state[id].m_state = SSHConnectionState::STATE_AUTHENTICATED;
 	}
 
-	/*
-	//If we get here, the password was GOOD. Report success.
-	OnRxAuthSuccess(id, uname, ulen, socket);
-	m_state[id].m_state = SSHConnectionState::STATE_AUTHENTICATED;
-	*/
+	//Just a query to see if this key is OK to use
+	else
+	{
+		//Report that this key is good
+		keyblob->ByteSwap();
+		auto segment = m_tcp.GetTxSegment(socket);
+		auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+		packet->m_type = SSHTransportPacket::SSH_MSG_USERAUTH_PK_OK;
+		auto buf = packet->Payload();
+
+		//Send the algorithm name
+		uint32_t alglenSwap = __builtin_bswap32(nomalglen);
+		memcpy(buf, &alglenSwap, sizeof(alglenSwap));
+		memcpy(buf + sizeof(uint32_t), g_sshUserKeyAlg, nomalglen);
+
+		//Send the key blob length
+		uint32_t bloblenSwap = __builtin_bswap32(keylen);
+		uint32_t off = sizeof(uint32_t) + nomalglen;
+		memcpy(buf + off, &bloblenSwap, sizeof(bloblenSwap));
+		off += sizeof(uint32_t);
+
+		//Send the key blob itself
+		memcpy(buf+off, keyblob, keylen);
+		off += keylen;
+
+		//Send it
+		SendEncryptedPacket(id, off, segment, packet, socket);
+	}
 }
 
 /**

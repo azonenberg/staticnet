@@ -29,35 +29,37 @@
 
 /**
 	@file
-	@brief Declaration of SSHPubkeyAuthenticator
+	@brief Declaration of SSHCurve25519SignatureBlob
  */
-#ifndef SSHPubkeyAuthenticator_h
-#define SSHPubkeyAuthenticator_h
-
-#include "SSHCurve25519KeyBlob.h"
+#ifndef SSHCurve25519SignatureBlob_h
+#define SSHCurve25519SignatureBlob_h
 
 /**
-	@brief Base class for public key authentication providers
+	@brief A curve25519 signature blob
  */
-class SSHPubkeyAuthenticator
+class __attribute__((packed)) SSHCurve25519SignatureBlob
 {
 public:
-	virtual ~SSHPubkeyAuthenticator() =default;
 
-	/**
-		@brief Checks if we are allowed to authenticate with a given username and public key.
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Byte ordering correction
 
-		This does *not* authenticate the user, it only checks whether we are willing to consider a login using
-		that particular key and username.
+	void ByteSwap();
 
-		Username may not be null terminated.
-	 */
-	virtual bool CanUseKey(
-		const char* username,
-		uint16_t username_len,
-		const SSHCurve25519KeyBlob* keyblob,
-		bool actualLoginAttempt
-		) =0;
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Server host key
+
+	///@brief Length of the key type (always 11)
+	uint32_t m_keyTypeLength;
+
+	///@brief Type of the key (always "ssh-ed25519" with no null terminator)
+	char m_keyType[11];
+
+	///@brief Length of the signature (always 64)
+	uint32_t m_sigLength;
+
+	///@brief The actual signature
+	uint8_t m_signature[ECDSA_SIG_SIZE];
 };
 
 #endif

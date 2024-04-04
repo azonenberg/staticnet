@@ -43,6 +43,7 @@
 #define AES_KEY_SIZE		16
 #define GCM_IV_SIZE			12
 #define GCM_TAG_SIZE		16
+#define ECDSA_SIG_SIZE		64
 
 /**
 	@brief Interface to an external crypto library or accelerator
@@ -100,6 +101,8 @@ public:
 		crypto_sign(sm, &smlen, exchangeHash, SHA256_DIGEST_SIZE, keyCombined);
 		memcpy(sigOut, sm, 64);
 	}
+
+	bool VerifySignature(uint8_t* signedMessage, uint32_t lengthIncludingSignature, uint8_t* publicKey);
 
 	///@brief Calculates the shared secret between our ephemeral private key and the client's public key
 	virtual void SharedSecret(uint8_t* sharedSecret, uint8_t* clientPublicKey);

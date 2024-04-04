@@ -187,3 +187,21 @@ void CryptoEngine::GetKeyFingerprint(char* buf, size_t len, uint8_t* pubkey)
 			buf[i] = '\0';
 	}
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Signature verification
+
+/**
+	@brief Verify a signed message
+
+	The signature is *prepended* to the message: first 64 bytes are signature, then the message
+ */
+bool CryptoEngine::VerifySignature(uint8_t* signedMessage, uint32_t lengthIncludingSignature, uint8_t* publicKey)
+{
+	//fixed length cap
+	if(lengthIncludingSignature > 1024)
+		return false;
+
+	unsigned char tmpbuf[1024];
+	return (0 == crypto_sign_open(tmpbuf, signedMessage, lengthIncludingSignature, publicKey));
+}

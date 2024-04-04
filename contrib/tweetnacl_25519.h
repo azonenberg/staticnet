@@ -21,6 +21,7 @@ int crypto_verify_32(const unsigned char *,const unsigned char *);
 int crypto_hashblocks(u8 *x,const u8 *m,u64 n);
 int crypto_hash(u8 *out,const u8 *m,u64 n);
 int crypto_sign(u8 *sm,u64 *smlen,const u8 *m,u64 n,const u8 *sk);
+int crypto_sign_open(unsigned char *,const unsigned char *,unsigned long long,const unsigned char *);
 
 int crypto_sign_keypair(u8 *pk, u8 *sk);
 

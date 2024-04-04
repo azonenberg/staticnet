@@ -27,37 +27,17 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of SSHPubkeyAuthenticator
- */
-#ifndef SSHPubkeyAuthenticator_h
-#define SSHPubkeyAuthenticator_h
+#include <staticnet-config.h>
+#include "../stack/staticnet.h"
+#include "SSHTransportServer.h"
+#include "SSHTransportPacket.h"
+#include "SSHCurve25519SignatureBlob.h"
 
-#include "SSHCurve25519KeyBlob.h"
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Byte ordering correction
 
-/**
-	@brief Base class for public key authentication providers
- */
-class SSHPubkeyAuthenticator
+void SSHCurve25519SignatureBlob::ByteSwap()
 {
-public:
-	virtual ~SSHPubkeyAuthenticator() =default;
-
-	/**
-		@brief Checks if we are allowed to authenticate with a given username and public key.
-
-		This does *not* authenticate the user, it only checks whether we are willing to consider a login using
-		that particular key and username.
-
-		Username may not be null terminated.
-	 */
-	virtual bool CanUseKey(
-		const char* username,
-		uint16_t username_len,
-		const SSHCurve25519KeyBlob* keyblob,
-		bool actualLoginAttempt
-		) =0;
-};
-
-#endif
+	m_keyTypeLength = __builtin_bswap32(m_keyTypeLength);
+	m_sigLength = __builtin_bswap32(m_sigLength);
+}
