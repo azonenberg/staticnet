@@ -46,10 +46,12 @@
 #include "SSHPtyRequestPacket.h"
 #include "SSHChannelDataPacket.h"
 #include "SSHDisconnectPacket.h"
+#include "SSHCurve25519KeyBlob.h"
 
 //Our single supported cipher suite
 static const char* g_sshKexAlg				= "curve25519-sha256";			//RFC 8731
 static const char* g_sshHostKeyAlg			= "ssh-ed25519";
+static const char* g_sshUserKeyAlg			= "ssh-ed25519";
 static const char* g_sshEncryptionAlg		= "aes128-gcm@openssh.com";
 static const char* g_sshMacAlg				= "none";						//implicit in GCM
 static const char* g_sshCompressionAlg		= "none";
@@ -58,12 +60,18 @@ static const char* g_sshCompressionAlg		= "none";
 static const char* g_strUserAuth			= "ssh-userauth";
 static const char* g_strConnection			= "ssh-connection";
 static const char* g_strAuthTypeQuery		= "none";
-static const char* g_authMethodList			= "password";
+static const char* g_authMethodList			= "publickey";	//TODO: switch for allowing pubkey or password
 static const char* g_strAuthMethodPassword	= "password";
+static const char* g_strAuthMethodPubkey	= "publickey";
 static const char* g_strSession				= "session";
 static const char* g_strPtyReq				= "pty-req";
 static const char* g_strEnvReq				= "env-req";
 static const char* g_strShellReq			= "shell";
+
+//DEBUG
+#include <stm32.h>
+#include <peripheral/UART.h>
+extern UART* g_cliUART;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
@@ -779,6 +787,13 @@ void SSHTransportServer::OnRxUserAuthRequest(int id, TCPTableEntry* socket, SSHT
 		return;
 	}
 
+	//Trying to authenticate with a public key
+	else if(StringMatchWithLength(g_strAuthMethodPubkey, authtype, authlen))
+	{
+		OnRxAuthTypePubkey(id, socket, req);
+		return;
+	}
+
 	//debug print, unknown type
 	else
 	{
@@ -878,6 +893,133 @@ void SSHTransportServer::OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSH
 	//If we get here, the password was GOOD. Report success.
 	OnRxAuthSuccess(id, uname, ulen, socket);
 	m_state[id].m_state = SSHConnectionState::STATE_AUTHENTICATED;
+}
+
+/**
+	@brief Handles a SSH_MSG_USERAUTH_REQUEST with type "publickey"
+ */
+void SSHTransportServer::OnRxAuthTypePubkey(int id, TCPTableEntry* socket, SSHUserAuthRequestPacket* req)
+{
+	const uint32_t nomalglen = 11;
+
+	//If we don't have an authenticator, reject the auth request
+	if(m_pubkeyAuth == nullptr)
+	{
+		//no change to state, still waiting for auth to complete
+		OnRxAuthFail(id, socket);
+		return;
+	}
+
+	//Extract username, and sanity check lengths
+	auto uname = req->GetUserNameStart();
+	auto ulen = req->GetUserNameLength();
+	if(ulen >= SSH_MAX_USERNAME)
+	{
+		OnRxAuthFail(id, socket);
+		return;
+	}
+
+	//Service name is ssh-connection, no need to check again
+	//auth type is publickey, no need to check again
+
+	//Extract the key algorithm
+	auto alg = req->GetAlgorithmStart();
+	auto alglen = req->GetAlgorithmLength();
+	if(alglen >= SSH_MAX_ALGLEN)
+	{
+		OnRxAuthFail(id, socket);
+		return;
+	}
+
+	//Extract the key blob itself
+	auto key = req->GetKeyBlobStart();
+	auto keylen = req->GetKeyBlobLength();
+	if(keylen > 64)
+	{
+		OnRxAuthFail(id, socket);
+		return;
+	}
+
+	if(req->IsActualAuthRequest())
+	{
+		g_cliUART->Printf("Actual auth request\n");
+
+		//TODO: handle this
+	}
+	else
+	{
+		//If it's a ssh-ed25519 key, for now allow it
+		if(StringMatchWithLength(g_sshUserKeyAlg, alg, alglen))
+		{
+			//Validate the blob and make sure it is a well-formed ssh-ed25519 key
+			auto keyblob = reinterpret_cast<SSHCurve25519KeyBlob*>(key);
+			keyblob->ByteSwap();
+			if(keyblob->m_keyTypeLength != nomalglen)
+			{
+				//g_cliUART->Printf("Invalid key type length (not %d)\n", alglen);
+				OnRxAuthFail(id, socket);
+				return;
+			}
+			if(!StringMatchWithLength(g_sshUserKeyAlg, keyblob->m_keyType, keyblob->m_keyTypeLength))
+			{
+				//g_cliUART->Printf("Invalid key type (not ssh-ed25519)\n");
+				OnRxAuthFail(id, socket);
+				return;
+			}
+			if(keyblob->m_pubKeyLength != 32)
+			{
+				//g_cliUART->Printf("Invalid pubkey length (not 32)\n");
+				OnRxAuthFail(id, socket);
+				return;
+			}
+
+			//Check against our list of allowed keys
+			if(!m_pubkeyAuth->CanUseKey(uname, ulen, keyblob))
+			{
+				//g_cliUART->Printf("Auth provider rejected key\n");
+				OnRxAuthFail(id, socket);
+				return;
+			}
+
+			//Report that this key is good
+			keyblob->ByteSwap();
+			auto segment = m_tcp.GetTxSegment(socket);
+			auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+			packet->m_type = SSHTransportPacket::SSH_MSG_USERAUTH_PK_OK;
+			auto buf = packet->Payload();
+
+			//Send the algorithm name
+			uint32_t alglenSwap = __builtin_bswap32(nomalglen);
+			memcpy(buf, &alglenSwap, sizeof(alglenSwap));
+			memcpy(buf + sizeof(uint32_t), g_sshUserKeyAlg, nomalglen);
+
+			//Send the key blob length
+			uint32_t bloblenSwap = __builtin_bswap32(keylen);
+			uint32_t off = sizeof(uint32_t) + nomalglen;
+			memcpy(buf + off, &bloblenSwap, sizeof(bloblenSwap));
+			off += sizeof(uint32_t);
+
+			//Send the key blob itself
+			memcpy(buf+off, keyblob, keylen);
+			off += keylen;
+
+			//Send it
+			SendEncryptedPacket(id, off, segment, packet, socket);
+		}
+
+		//If not, we don't support it
+		else
+		{
+			OnRxAuthFail(id, socket);
+			return;
+		}
+	}
+
+	/*
+	//If we get here, the password was GOOD. Report success.
+	OnRxAuthSuccess(id, uname, ulen, socket);
+	m_state[id].m_state = SSHConnectionState::STATE_AUTHENTICATED;
+	*/
 }
 
 /**

@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021-2023 Andrew D. Zonenberg and contributors                                                         *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -155,7 +155,7 @@ void CryptoEngine::GenerateX25519KeyPair(uint8_t* pub)
 
 	This function uses the SHA256 engine and will overwrite any in progress SHA256 hash.
  */
-void CryptoEngine::GetHostKeyFingerprint(char* buf, size_t len)
+void CryptoEngine::GetKeyFingerprint(char* buf, size_t len, uint8_t* pubkey)
 {
 	if(len < 49)
 		return;
@@ -167,7 +167,7 @@ void CryptoEngine::GetHostKeyFingerprint(char* buf, size_t len)
 	SHA256_Update((uint8_t*)"ssh-ed25519", 11);
 	tmp = __builtin_bswap32(32);
 	SHA256_Update((uint8_t*)&tmp, sizeof(tmp));
-	SHA256_Update(m_hostkeyPub, ECDH_KEY_SIZE);
+	SHA256_Update(pubkey, ECDH_KEY_SIZE);
 
 	//Done hashing
 	uint8_t digest[SHA256_DIGEST_SIZE];

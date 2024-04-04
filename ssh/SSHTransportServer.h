@@ -37,6 +37,7 @@
 #include "../crypt/CryptoEngine.h"
 #include "../util/CircularFIFO.h"
 #include "SSHPasswordAuthenticator.h"
+#include "SSHPubkeyAuthenticator.h"
 #include "../net/tcp/TCPServer.h"
 
 class SSHTransportPacket;
@@ -44,6 +45,10 @@ class SSHKexInitPacket;
 class SSHUserAuthRequestPacket;
 class SSHSessionRequestPacket;
 class SSHPtyRequestPacket;
+
+#ifndef SSH_MAX_ALGLEN
+#define SSH_MAX_ALGLEN 16
+#endif
 
 /**
 	@brief State for a single SSH connection
@@ -165,6 +170,12 @@ public:
 	void UsePasswordAuthenticator(SSHPasswordAuthenticator* auth)
 	{ m_passwordAuth = auth; }
 
+	/**
+		@brief Sets the authentication provider we use for checking public key logins
+	 */
+	void UsePubkeyAuthenticator(SSHPubkeyAuthenticator* auth)
+	{ m_pubkeyAuth = auth; }
+
 	virtual void GracefulDisconnect(int id, TCPTableEntry* socket) override;
 
 protected:
@@ -182,6 +193,7 @@ protected:
 	void OnRxAuthTypeQuery(int id, TCPTableEntry* socket);
 	void OnRxAuthFail(int id, TCPTableEntry* socket);
 	void OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSHUserAuthRequestPacket* packet);
+	void OnRxAuthTypePubkey(int id, TCPTableEntry* socket, SSHUserAuthRequestPacket* packet);
 	void OnRxAuthSuccess(int id, const char* username, int16_t usernamelen, TCPTableEntry* socket);
 	void OnRxChannelOpen(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
 	void OnRxChannelOpenSession(int id, TCPTableEntry* socket, SSHSessionRequestPacket* packet);
@@ -207,6 +219,9 @@ protected:
 
 	///@brief The authenticator for password logins
 	SSHPasswordAuthenticator* m_passwordAuth;
+
+	///@brief The authenticator for publickey logins
+	SSHPubkeyAuthenticator* m_pubkeyAuth;
 
 	/**
 		@brief Writes a big-endian uint32_t to a buffer

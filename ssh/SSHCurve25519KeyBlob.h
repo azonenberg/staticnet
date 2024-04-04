@@ -29,31 +29,37 @@
 
 /**
 	@file
-	@brief Declaration of SSHPasswordAuthenticator
+	@brief Declaration of SSHCurve25519KeyBlob
  */
-#ifndef SSHPasswordAuthenticator_h
-#define SSHPasswordAuthenticator_h
+#ifndef SSHCurve25519KeyBlob_h
+#define SSHCurve25519KeyBlob_h
 
 /**
-	@brief Base class for password authentication providers
+	@brief A curve25519 key blob
  */
-class SSHPasswordAuthenticator
+class __attribute__((packed)) SSHCurve25519KeyBlob
 {
 public:
-	virtual ~SSHPasswordAuthenticator() =default;
 
-	/**
-		@brief Tests a username/password combination for validity, using the supplied crypto engine for hashing.
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Byte ordering correction
 
-		Username and password may not be null terminated.
-	 */
-	virtual bool TestLogin(
-		const char* username,
-		uint16_t username_len,
-		const char* password,
-		uint16_t password_len,
-		CryptoEngine* crypto
-		) =0;
+	void ByteSwap();
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Server host key
+
+	///@brief Length of the key type (always 11)
+	uint32_t m_keyTypeLength;
+
+	///@brief Type of the key (always "ssh-ed25519" with no null terminator)
+	char m_keyType[11];
+
+	///@brief Length of the public key (always 32)
+	uint32_t m_pubKeyLength;
+
+	///@brief The actual public key
+	uint8_t m_pubKey[32];
 };
 
 #endif

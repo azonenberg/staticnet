@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021-2023 Andrew D. Zonenberg and contributors                                                         *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -130,7 +130,15 @@ public:
 	 */
 	virtual void EncryptAndMAC(uint8_t* data, uint16_t len) =0;
 
-	void GetHostKeyFingerprint(char* buf, size_t len);
+	/**
+		@brief Gets the host key fingerprint (base64 encoded SHA256).
+
+		This function uses the SHA256 engine and will overwrite any in progress SHA256 hash.
+	 */
+	void GetHostKeyFingerprint(char* buf, size_t len)
+	{ GetKeyFingerprint(buf, len, m_hostkeyPub); }
+
+	void GetKeyFingerprint(char* buf, size_t len, uint8_t* pubkey);
 
 protected:
 

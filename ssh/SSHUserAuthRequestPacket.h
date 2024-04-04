@@ -45,7 +45,7 @@ class __attribute__((packed)) SSHUserAuthRequestPacket
 public:
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Field accessors
+	// Common field accessors (for all message types)
 
 	/**
 		@brief Gets a pointer to the start of the user name (NOT null terminated)
@@ -83,6 +83,9 @@ public:
 	uint32_t GetAuthTypeLength()
 	{ return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetAuthTypeStart() - sizeof(uint32_t))); }
 
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Password auth specific
+
 	/**
 		@brief Gets a pointer to the start of the password (NOT null terminated)
 	 */
@@ -94,6 +97,41 @@ public:
 	 */
 	uint32_t GetPasswordLength()
 	{ return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetPasswordStart() - sizeof(uint32_t))); }
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Pubkey auth specific
+
+	/**
+		@brief Returns true if this is an authentication request
+
+		and false if it's a query to see what public key is acceptable
+	 */
+	bool IsActualAuthRequest()
+	{ return *reinterpret_cast<uint8_t*>(GetAuthTypeStart() + GetAuthTypeLength()) ? true : false; }
+
+	/**
+		@brief Gets the length of the pubkey algorithm type
+	 */
+	uint32_t GetAlgorithmLength()
+	{ return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetAlgorithmStart() - sizeof(uint32_t))); }
+
+	/**
+		@brief Gets a pointer to the start of the algorithm length (NOT null terminated)
+	 */
+	char* GetAlgorithmStart()
+	{ return GetAuthTypeStart() + GetAuthTypeLength() + 1 + sizeof(uint32_t); }
+
+	/**
+		@brief Gets the length of the pubkey blob
+	 */
+	uint32_t GetKeyBlobLength()
+	{ return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetKeyBlobStart() - sizeof(uint32_t))); }
+
+	/**
+		@brief Gets a pointer to the start of the key blob
+	 */
+	uint8_t* GetKeyBlobStart()
+	{ return reinterpret_cast<uint8_t*>(GetAlgorithmStart() + GetAlgorithmLength() + sizeof(uint32_t)); }
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Field content

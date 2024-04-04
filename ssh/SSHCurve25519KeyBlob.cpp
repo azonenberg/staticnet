@@ -27,33 +27,17 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of SSHPasswordAuthenticator
- */
-#ifndef SSHPasswordAuthenticator_h
-#define SSHPasswordAuthenticator_h
+#include <staticnet-config.h>
+#include "../stack/staticnet.h"
+#include "SSHTransportServer.h"
+#include "SSHTransportPacket.h"
+#include "SSHCurve25519KeyBlob.h"
 
-/**
-	@brief Base class for password authentication providers
- */
-class SSHPasswordAuthenticator
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Byte ordering correction
+
+void SSHCurve25519KeyBlob::ByteSwap()
 {
-public:
-	virtual ~SSHPasswordAuthenticator() =default;
-
-	/**
-		@brief Tests a username/password combination for validity, using the supplied crypto engine for hashing.
-
-		Username and password may not be null terminated.
-	 */
-	virtual bool TestLogin(
-		const char* username,
-		uint16_t username_len,
-		const char* password,
-		uint16_t password_len,
-		CryptoEngine* crypto
-		) =0;
-};
-
-#endif
+	m_keyTypeLength = __builtin_bswap32(m_keyTypeLength);
+	m_pubKeyLength = __builtin_bswap32(m_pubKeyLength);
+}

@@ -29,30 +29,33 @@
 
 /**
 	@file
-	@brief Declaration of SSHPasswordAuthenticator
+	@brief Declaration of SSHPubkeyAuthenticator
  */
-#ifndef SSHPasswordAuthenticator_h
-#define SSHPasswordAuthenticator_h
+#ifndef SSHPubkeyAuthenticator_h
+#define SSHPubkeyAuthenticator_h
+
+#include "SSHCurve25519KeyBlob.h"
 
 /**
-	@brief Base class for password authentication providers
+	@brief Base class for public key authentication providers
  */
-class SSHPasswordAuthenticator
+class SSHPubkeyAuthenticator
 {
 public:
-	virtual ~SSHPasswordAuthenticator() =default;
+	virtual ~SSHPubkeyAuthenticator() =default;
 
 	/**
-		@brief Tests a username/password combination for validity, using the supplied crypto engine for hashing.
+		@brief Checks if we are allowed to authenticate with a given username and public key.
 
-		Username and password may not be null terminated.
+		This does *not* authenticate the user, it only checks whether we are willing to consider a login using
+		that particular key and username.
+
+		Username may not be null terminated.
 	 */
-	virtual bool TestLogin(
+	virtual bool CanUseKey(
 		const char* username,
 		uint16_t username_len,
-		const char* password,
-		uint16_t password_len,
-		CryptoEngine* crypto
+		const SSHCurve25519KeyBlob* keyblob
 		) =0;
 };
 
