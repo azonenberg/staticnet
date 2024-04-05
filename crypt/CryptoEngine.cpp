@@ -189,7 +189,22 @@ void CryptoEngine::GetKeyFingerprint(char* buf, size_t len, uint8_t* pubkey)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Signature verification
+// Signature creation and verification
+
+///@brief Signs an exchange hash with our host key
+void CryptoEngine::SignExchangeHash(uint8_t* sigOut, uint8_t* exchangeHash)
+{
+	//tweetnacl wants the public key here which is kinda derpy, we don't actually need it
+	//TODO: optimize out this stupidity
+	uint8_t keyCombined[64];
+	memcpy(keyCombined, m_hostkeyPriv, 32);
+	memcpy(keyCombined + 32, m_hostkeyPub, 32);
+
+	uint8_t sm[128];
+	uint64_t smlen;
+	crypto_sign(sm, &smlen, exchangeHash, SHA256_DIGEST_SIZE, keyCombined);
+	memcpy(sigOut, sm, 64);
+}
 
 /**
 	@brief Verify a signed message

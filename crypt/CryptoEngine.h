@@ -89,21 +89,9 @@ public:
 	{ return m_hostkeyPriv; }
 
 	///@brief Signs an exchange hash with our host key
-	void SignExchangeHash(uint8_t* sigOut, uint8_t* exchangeHash)
-	{
-		//tweetnacl wants the public key here which is kinda derpy, we don't actually need it
-		//TODO: optimize out this stupidity
-		uint8_t keyCombined[64];
-		memcpy(keyCombined, m_hostkeyPriv, 32);
-		memcpy(keyCombined + 32, m_hostkeyPub, 32);
+	virtual void SignExchangeHash(uint8_t* sigOut, uint8_t* exchangeHash);
 
-		uint8_t sm[128];
-		uint64_t smlen;
-		crypto_sign(sm, &smlen, exchangeHash, SHA256_DIGEST_SIZE, keyCombined);
-		memcpy(sigOut, sm, 64);
-	}
-
-	bool VerifySignature(uint8_t* signedMessage, uint32_t lengthIncludingSignature, uint8_t* publicKey);
+	virtual bool VerifySignature(uint8_t* signedMessage, uint32_t lengthIncludingSignature, uint8_t* publicKey);
 
 	///@brief Calculates the shared secret between our ephemeral private key and the client's public key
 	virtual void SharedSecret(uint8_t* sharedSecret, uint8_t* clientPublicKey);

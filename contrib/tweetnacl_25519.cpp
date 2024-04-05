@@ -410,7 +410,7 @@ void scalarbase(gf p[4],const u8 *s)
 
 static const u64 L[32] = {0xed, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde, 0x14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10};
 
-sv modL(u8 *r,i64 x[64])
+void modL(u8 *r,i64 x[64])
 {
   i64 carry,i,j;
   for (i = 63;i >= 32;--i) {

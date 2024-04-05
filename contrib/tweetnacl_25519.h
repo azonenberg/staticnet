@@ -31,5 +31,6 @@ void scalarmult(gf p[4],gf q[4],const u8 *s);
 void scalarbase(gf p[4],const u8 *s);
 void add(gf p[4],gf q[4]);
 void pack(u8 *r,gf p[4]);
+void modL(u8 *r,i64 x[64]);
 
 #endif
