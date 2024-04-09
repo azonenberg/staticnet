@@ -32,5 +32,9 @@ void scalarbase(gf p[4],const u8 *s);
 void add(gf p[4],gf q[4]);
 void pack(u8 *r,gf p[4]);
 void modL(u8 *r,i64 x[64]);
+void pack25519(u8 *o,const gf n);
+void unpack25519(gf o, const u8 *n);
+void M(gf o,const gf a,const gf b);
+void set25519(gf r, const gf a);
 
 #endif

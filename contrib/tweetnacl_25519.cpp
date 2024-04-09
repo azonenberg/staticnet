@@ -56,7 +56,7 @@ int crypto_verify_32(const u8 *x,const u8 *y)
   return vn(x,y,32);
 }
 
-sv set25519(gf r, const gf a)
+void set25519(gf r, const gf a)
 {
   int i;
   FOR(i,16) r[i]=a[i];
@@ -84,7 +84,7 @@ sv sel25519(gf p,gf q,int b)
   }
 }
 
-sv pack25519(u8 *o,const gf n)
+void pack25519(u8 *o,const gf n)
 {
   int i,j,b;
   gf m,t;
@@ -124,7 +124,7 @@ static u8 par25519(const gf a)
   return d[0]&1;
 }
 
-sv unpack25519(gf o, const u8 *n)
+void unpack25519(gf o, const u8 *n)
 {
   int i;
   FOR(i,16) o[i]=n[2*i]+((i64)n[2*i+1]<<8);
@@ -143,7 +143,7 @@ sv Z(gf o,const gf a,const gf b)
   FOR(i,16) o[i]=a[i]-b[i];
 }
 
-sv M(gf o,const gf a,const gf b)
+void M(gf o,const gf a,const gf b)
 {
   i64 i,j,t[31];
   FOR(i,31) t[i]=0;
