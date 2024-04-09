@@ -36,5 +36,12 @@ void pack25519(u8 *o,const gf n);
 void unpack25519(gf o, const u8 *n);
 void M(gf o,const gf a,const gf b);
 void set25519(gf r, const gf a);
+void inv25519(gf o,const gf i);
+u8 par25519(const gf a);
+void Z(gf o,const gf a,const gf b);
+void A(gf o,const gf a,const gf b);
+void pow2523(gf o,const gf i);
+void S(gf o,const gf a);
+int neq25519(const gf a, const gf b);
 
 #endif

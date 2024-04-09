@@ -109,7 +109,7 @@ void pack25519(u8 *o,const gf n)
   }
 }
 
-static int neq25519(const gf a, const gf b)
+int neq25519(const gf a, const gf b)
 {
   u8 c[32],d[32];
   pack25519(c,a);
@@ -117,7 +117,7 @@ static int neq25519(const gf a, const gf b)
   return crypto_verify_32(c,d);
 }
 
-static u8 par25519(const gf a)
+u8 par25519(const gf a)
 {
   u8 d[32];
   pack25519(d,a);
@@ -131,13 +131,13 @@ void unpack25519(gf o, const u8 *n)
   o[15]&=0x7fff;
 }
 
-sv A(gf o,const gf a,const gf b)
+void A(gf o,const gf a,const gf b)
 {
   int i;
   FOR(i,16) o[i]=a[i]+b[i];
 }
 
-sv Z(gf o,const gf a,const gf b)
+void Z(gf o,const gf a,const gf b)
 {
   int i;
   FOR(i,16) o[i]=a[i]-b[i];
@@ -154,12 +154,12 @@ void M(gf o,const gf a,const gf b)
   car25519(o);
 }
 
-sv S(gf o,const gf a)
+void S(gf o,const gf a)
 {
   M(o,a,a);
 }
 
-sv inv25519(gf o,const gf i)
+void inv25519(gf o,const gf i)
 {
   gf c;
   int a;
@@ -171,7 +171,7 @@ sv inv25519(gf o,const gf i)
   FOR(a,16) o[a]=c[a];
 }
 
-sv pow2523(gf o,const gf i)
+void pow2523(gf o,const gf i)
 {
   gf c;
   int a;
