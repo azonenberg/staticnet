@@ -66,6 +66,7 @@ class TCPTableEntry
 public:
 	TCPTableEntry()
 	: m_valid(false)
+	, m_remoteSeqSent(0)
 	{
 		memset(m_unackedFrames, 0, sizeof(m_unackedFrames));
 	}
@@ -78,12 +79,23 @@ public:
 	/**
 		@brief Expected sequence number of the next incoming packet.
 
-		This is the most recent ACK number we sent.
+		This is the most recent ACK number we sent (or are going to send)
 	 */
 	uint32_t m_remoteSeq;
 
 	///@brief Most recent sequence number we sent
 	uint32_t m_localSeq;
+
+	/**
+		@brief Most recent ACK number *actually sent*
+	 */
+	uint32_t m_remoteSeqSent;
+
+	///@brief Initial sequence number sent by us
+	uint32_t m_localInitialSeq;
+
+	///@brief Initial sequence number sent by remote side
+	uint32_t m_remoteInitialSeq;
 
 	//TODO: aging for session idle closure
 

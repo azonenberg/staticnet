@@ -215,6 +215,8 @@ void TCPProtocol::OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress)
 	state->m_remotePort = segment->m_sourcePort;
 	state->m_remoteSeq = segment->m_sequence + 1;
 	state->m_localSeq = GenerateInitialSequenceNumber();
+	state->m_remoteInitialSeq = segment->m_sequence;
+	state->m_localInitialSeq = state->m_localSeq;
 
 	//Prepare the reply
 	auto reply = CreateReply(state);
@@ -263,7 +265,13 @@ void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16
 	if(state == nullptr)
 		return;
 
-	//If remote sequence number is too BIG: we missed a packet, this is the next one in line.
+	uint32_t relSeq = segment->m_sequence - state->m_remoteInitialSeq;
+	uint32_t relAck = segment->m_ack - state->m_localInitialSeq;
+	uint32_t relSeqExpected = state->m_remoteSeq - state->m_remoteInitialSeq;
+
+	bool isFin = (segment->m_offsetAndFlags & TCPSegment::FLAG_FIN) == TCPSegment::FLAG_FIN;
+
+	//If incoming sequence number is too BIG: we missed a packet, this is the next one in line.
 	//If too SMALL: this is a duplicate packet.
 	//Send an ACK for the last packet we *did* get
 	if(state->m_remoteSeq != segment->m_sequence)
@@ -331,7 +339,13 @@ void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16
 	}
 
 	//If no data, and not a FIN, no action needed (duplicate ACK?)
-	else if( (segment->m_offsetAndFlags & TCPSegment::FLAG_FIN) == 0)
+	else if(!isFin)
+		return;
+
+	//At this point we had data and should send an ACK.
+	//But if OnRxData() sent payload data, we might have already sent the new ACK number in that segment.
+	//Don't send an ACK-only segment in that case.
+	if( (state->m_remoteSeq == state->m_remoteSeqSent) && !isFin)
 		return;
 
 	//Send our reply
@@ -366,6 +380,9 @@ void TCPProtocol::SendSegment(TCPTableEntry* state, TCPSegment* segment, IPv4Pac
 {
 	//Calculate the pseudoheader checksum
 	auto pseudoHeaderChecksum = m_ipv4->PseudoHeaderChecksum(packet, length);
+
+	//Make an note of what ACK number we just sent
+	state->m_remoteSeqSent = state->m_remoteSeq;
 
 	//Need to be in network byte order before we send
 	segment->ByteSwap();
