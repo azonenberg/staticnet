@@ -265,10 +265,6 @@ void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16
 	if(state == nullptr)
 		return;
 
-	uint32_t relSeq = segment->m_sequence - state->m_remoteInitialSeq;
-	uint32_t relAck = segment->m_ack - state->m_localInitialSeq;
-	uint32_t relSeqExpected = state->m_remoteSeq - state->m_remoteInitialSeq;
-
 	bool isFin = (segment->m_offsetAndFlags & TCPSegment::FLAG_FIN) == TCPSegment::FLAG_FIN;
 
 	//If incoming sequence number is too BIG: we missed a packet, this is the next one in line.
