@@ -29,28 +29,49 @@
 
 /**
 	@file
-	@brief Main header file for staticnet library.
+	@brief Declaration of UDPPacket
  */
 
-#ifndef staticnet_h
-#define staticnet_h
+#ifndef UDPPacket_h
+#define UDPPacket_h
 
-//provided by your project, must be in the search path
-#include <staticnet-config.h>
+/**
+	@brief A UDP packet sent over IPv4
+ */
+class __attribute__((packed)) UDPPacket
+{
+public:
 
-#include <stdint.h>
-#include <memory.h>
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Byte ordering correction
 
-#include "../drivers/base/EthernetInterface.h"
-#include "../net/ethernet/EthernetProtocol.h"
-#include "../net/arp/ARPProtocol.h"
-#include "../net/ipv4/IPv4Protocol.h"
-#include "../net/icmpv4/ICMPv4Protocol.h"
-#include "../net/tcp/TCPProtocol.h"
-#include "../net/udp/UDPProtocol.h"
+	void ByteSwap();
 
-//Constants used for FNV hash
-#define FNV_INITIAL	0x811c9dc5
-#define FNV_MULT	0x01000193
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Accessors for actual packet data
+
+	uint8_t* Payload()
+	{ return reinterpret_cast<uint8_t*>(this) + sizeof(this); }
+
+	IPv4Packet* Parent()
+	{ return reinterpret_cast<IPv4Packet*>(reinterpret_cast<uint8_t*>(this) - sizeof(IPv4Packet)); }
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Data members
+
+	///@brief Source port number
+	uint16_t m_sourcePort;
+
+	///@brief Destination port number
+	uint16_t m_destPort;
+
+	///@brief Packet length
+	uint16_t m_len;
+
+	///@brief Checksum
+	uint16_t m_checksum;
+
+	//Data comes after this
+};
 
 #endif

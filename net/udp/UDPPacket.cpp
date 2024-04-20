@@ -27,30 +27,16 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Main header file for staticnet library.
- */
-
-#ifndef staticnet_h
-#define staticnet_h
-
-//provided by your project, must be in the search path
 #include <staticnet-config.h>
+#include <staticnet/stack/staticnet.h>
 
-#include <stdint.h>
-#include <memory.h>
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Byte swapping
 
-#include "../drivers/base/EthernetInterface.h"
-#include "../net/ethernet/EthernetProtocol.h"
-#include "../net/arp/ARPProtocol.h"
-#include "../net/ipv4/IPv4Protocol.h"
-#include "../net/icmpv4/ICMPv4Protocol.h"
-#include "../net/tcp/TCPProtocol.h"
-#include "../net/udp/UDPProtocol.h"
-
-//Constants used for FNV hash
-#define FNV_INITIAL	0x811c9dc5
-#define FNV_MULT	0x01000193
-
-#endif
+void UDPPacket::ByteSwap()
+{
+	m_sourcePort = __builtin_bswap16(m_sourcePort);
+	m_destPort = __builtin_bswap16(m_destPort);
+	m_len = __builtin_bswap16(m_len);
+	//don't swap checksum, we do that in network byte order
+}

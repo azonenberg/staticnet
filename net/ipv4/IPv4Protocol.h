@@ -58,6 +58,7 @@ public:
 
 class ICMPv4Protocol;
 class TCPProtocol;
+class UDPProtocol;
 
 #define IPV4_PAYLOAD_MTU (ETHERNET_PAYLOAD_MTU - 20)
 
@@ -108,6 +109,9 @@ public:
 	void UseTCP(TCPProtocol* tcp)
 	{ m_tcp = tcp; }
 
+	void UseUDP(UDPProtocol* udp)
+	{ m_udp = udp; }
+
 	AddressType GetAddressType(IPv4Address addr);
 	bool IsLocalSubnet(IPv4Address addr);
 
@@ -127,6 +131,9 @@ protected:
 
 	///@brief TCP protocol
 	TCPProtocol* m_tcp;
+
+	///@brief UDP protocol
+	UDPProtocol* m_udp;
 };
 
 #endif

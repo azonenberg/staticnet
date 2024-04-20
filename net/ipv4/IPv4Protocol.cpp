@@ -42,8 +42,9 @@ IPv4Protocol::IPv4Protocol(EthernetProtocol& eth, IPv4Config& config, ARPCache& 
 	: m_eth(eth)
 	, m_config(config)
 	, m_cache(cache)
-	, m_icmpv4(NULL)
-	, m_tcp(NULL)
+	, m_icmpv4(nullptr)
+	, m_tcp(nullptr)
+	, m_udp(nullptr)
 {
 
 }
@@ -214,7 +215,11 @@ void IPv4Protocol::OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength
 		case IP_PROTO_UDP:
 			if(type == ADDR_UNICAST_US)
 			{
-				//printf("got UDP packet TODO\n");
+				m_udp->OnRxPacket(
+					reinterpret_cast<UDPPacket*>(packet->Payload()),
+					plen,
+					packet->m_sourceAddress,
+					PseudoHeaderChecksum(packet, plen));
 			}
 			break;
 
@@ -278,7 +283,7 @@ void IPv4Protocol::OnAgingTick10x()
 /**
 	@brief Allocates an outbound packet and prepare to send it
 
-	Returns NULL if we don't have an ARP entry for the destination yet and it's not a broadcast
+	Returns nullptr if we don't have an ARP entry for the destination yet and it's not a broadcast
  */
 IPv4Packet* IPv4Protocol::GetTxPacket(IPv4Address dest, ipproto_t proto)
 {

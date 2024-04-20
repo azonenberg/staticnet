@@ -29,28 +29,52 @@
 
 /**
 	@file
-	@brief Main header file for staticnet library.
+	@brief Declaration of UDPProtocol
  */
 
-#ifndef staticnet_h
-#define staticnet_h
+#ifndef UDPProtocol_h
+#define UDPProtocol_h
 
-//provided by your project, must be in the search path
-#include <staticnet-config.h>
+#include "UDPPacket.h"
 
-#include <stdint.h>
-#include <memory.h>
+#define UDP_IPV4_PAYLOAD_MTU (IPV4_PAYLOAD_MTU - 4)
 
-#include "../drivers/base/EthernetInterface.h"
-#include "../net/ethernet/EthernetProtocol.h"
-#include "../net/arp/ARPProtocol.h"
-#include "../net/ipv4/IPv4Protocol.h"
-#include "../net/icmpv4/ICMPv4Protocol.h"
-#include "../net/tcp/TCPProtocol.h"
-#include "../net/udp/UDPProtocol.h"
+/**
+	@brief UDP protocol driver
+ */
+class UDPProtocol
+{
+public:
+	UDPProtocol(IPv4Protocol* ipv4);
+	//TODO: IPv6 backend
 
-//Constants used for FNV hash
-#define FNV_INITIAL	0x811c9dc5
-#define FNV_MULT	0x01000193
+	void OnRxPacket(
+		UDPPacket* packet,
+		uint16_t ipPayloadLength,
+		IPv4Address sourceAddress,
+		uint16_t pseudoHeaderChecksum);
+
+	///@brief Allocates an outbound packet
+	UDPPacket* GetTxPacket(IPv4Address dstip);
+
+	///@brief Cancels sending of a packet
+	void CancelTxPacket(UDPPacket* packet);
+
+	/**
+		@brief Sends a UDP packet on a given socket handle
+	 */
+	void SendTxPacket(
+		UDPPacket* packet,
+		uint16_t sport,
+		uint16_t dport,
+		uint16_t payloadLength);
+
+protected:
+
+	virtual void OnRxData(IPv4Address srcip, uint16_t sport, uint16_t dport, uint8_t* payload, uint16_t payloadLen);
+
+	///@brief The IPv4 protocol stack
+	IPv4Protocol* m_ipv4;
+};
 
 #endif
