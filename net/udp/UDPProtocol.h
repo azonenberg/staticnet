@@ -54,6 +54,10 @@ public:
 		IPv4Address sourceAddress,
 		uint16_t pseudoHeaderChecksum);
 
+	//Called at 1 Hz by the stack to handle protocol-level aging
+	virtual void OnAgingTick()
+	{}
+
 	///@brief Allocates an outbound packet
 	UDPPacket* GetTxPacket(IPv4Address dstip);
 
@@ -68,6 +72,9 @@ public:
 		uint16_t sport,
 		uint16_t dport,
 		uint16_t payloadLength);
+
+	IPv4Protocol* GetIPv4()
+	{ return m_ipv4; }
 
 protected:
 

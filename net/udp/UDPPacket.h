@@ -51,7 +51,7 @@ public:
 	// Accessors for actual packet data
 
 	uint8_t* Payload()
-	{ return reinterpret_cast<uint8_t*>(this) + sizeof(this); }
+	{ return reinterpret_cast<uint8_t*>(this) + sizeof(*this); }
 
 	IPv4Packet* Parent()
 	{ return reinterpret_cast<IPv4Packet*>(reinterpret_cast<uint8_t*>(this) - sizeof(IPv4Packet)); }
