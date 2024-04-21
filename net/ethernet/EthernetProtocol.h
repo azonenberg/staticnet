@@ -89,6 +89,9 @@ public:
 	ARPProtocol* GetARP()
 	{ return m_arp; }
 
+	bool IsLinkUp()
+	{ return m_linkUp; }
+
 protected:
 
 	///@brief Driver for the Ethernet MAC
@@ -97,11 +100,14 @@ protected:
 	///@brief Our MAC address
 	MACAddress m_mac;
 
-	//The ARP protocol stack for this port (if present)
+	///@brief The ARP protocol stack for this port (if present)
 	ARPProtocol* m_arp;
 
-	//The IPv4 protocol stack for this port (if present)
+	///@brief The IPv4 protocol stack for this port (if present)
 	IPv4Protocol* m_ipv4;
+
+	///@brief Link state
+	bool m_linkUp;
 };
 
 #endif

@@ -40,6 +40,7 @@ EthernetProtocol::EthernetProtocol(EthernetInterface& iface, MACAddress our_mac)
 	, m_mac(our_mac)
 	, m_arp(nullptr)
 	, m_ipv4(nullptr)
+	, m_linkUp(false)
 {
 
 }
@@ -49,12 +50,16 @@ EthernetProtocol::EthernetProtocol(EthernetInterface& iface, MACAddress our_mac)
 
 void EthernetProtocol::OnLinkUp()
 {
+	m_linkUp = true;
+
 	if(m_ipv4)
 		m_ipv4->OnLinkUp();
 }
 
 void EthernetProtocol::OnLinkDown()
 {
+	m_linkUp = false;
+
 	if(m_ipv4)
 		m_ipv4->OnLinkDown();
 }
