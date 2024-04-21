@@ -45,6 +45,7 @@ IPv4Protocol::IPv4Protocol(EthernetProtocol& eth, IPv4Config& config, ARPCache& 
 	, m_icmpv4(nullptr)
 	, m_tcp(nullptr)
 	, m_udp(nullptr)
+	, m_allowUnknownUnicasts(false)
 {
 
 }
@@ -178,7 +179,7 @@ void IPv4Protocol::OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength
 	//Discard any packet that isn't for an address we care about
 	//TODO: discard anything directed to a multicast group we're not interested in?
 	auto type = GetAddressType(packet->m_destAddress );
-	if(type == ADDR_UNICAST_OTHER)
+	if( (type == ADDR_UNICAST_OTHER) && !m_allowUnknownUnicasts)
 		return;
 
 	//Figure out the upper layer protocol
@@ -211,9 +212,9 @@ void IPv4Protocol::OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength
 			}
 			break;
 
-		//TODO: handle UDP traffic
+		//Allow unknown unicasts on request for UDP to enable e.g. DHCP
 		case IP_PROTO_UDP:
-			if(type == ADDR_UNICAST_US)
+			if(m_udp && ( (type == ADDR_UNICAST_US) || m_allowUnknownUnicasts) )
 			{
 				m_udp->OnRxPacket(
 					reinterpret_cast<UDPPacket*>(packet->Payload()),
@@ -256,6 +257,9 @@ void IPv4Protocol::OnLinkDown()
  */
 void IPv4Protocol::OnAgingTick()
 {
+	if(m_udp)
+		m_udp->OnAgingTick();
+
 	auto expiry = m_cache.GetExpiry(m_config.m_gateway);
 
 	//If it expires soon, send a query

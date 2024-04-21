@@ -70,6 +70,14 @@ class IPv4Protocol
 public:
 	IPv4Protocol(EthernetProtocol& eth, IPv4Config& config, ARPCache& cache);
 
+	/**
+		@brief Enables reception of unicast IPv4 packets to addresses other than what we currently have configured
+
+		This is typically needed for DHCP to work.
+	 */
+	void SetAllowUnknownUnicasts(bool allow)
+	{ m_allowUnknownUnicasts = allow; }
+
 	enum ipproto_t
 	{
 		IP_PROTO_ICMP	= 1,
@@ -115,6 +123,9 @@ public:
 	AddressType GetAddressType(IPv4Address addr);
 	bool IsLocalSubnet(IPv4Address addr);
 
+	EthernetProtocol* GetEthernet()
+	{ return &m_eth; }
+
 protected:
 
 	///@brief The Ethernet protocol stack
@@ -134,6 +145,9 @@ protected:
 
 	///@brief UDP protocol
 	UDPProtocol* m_udp;
+
+	///@brief True to forward unicasts to unknown addresses to us
+	bool m_allowUnknownUnicasts;
 };
 
 #endif
