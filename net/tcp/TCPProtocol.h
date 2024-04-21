@@ -68,7 +68,6 @@ public:
 	: m_valid(false)
 	, m_remoteSeqSent(0)
 	{
-		memset(m_unackedFrames, 0, sizeof(m_unackedFrames));
 	}
 
 	bool m_valid;
