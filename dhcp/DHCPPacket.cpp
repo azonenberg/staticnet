@@ -29,129 +29,95 @@
 
 /**
 	@file
-	@brief Declaration of IPv4Protocol
+	@brief Declaration of DHCPClient
  */
-
-#ifndef IPv4Protocol_h
-#define IPv4Protocol_h
-
-#include <stdint.h>
-#include "IPv4Address.h"
-#include "IPv4Packet.h"
-
-inline bool operator!= (const IPv4Address& a, const IPv4Address& b)
-{ return a.m_word != b.m_word; }
-
-inline bool operator== (const IPv4Address& a, const IPv4Address& b)
-{ return a.m_word == b.m_word; }
+#include <staticnet/stack/staticnet.h>
+#include "DHCPClient.h"
+#include "DHCPPacket.h"
 
 /**
-	@brief IPv4 address configuration
+	@brief Appends an option to the given pointer (which must point to the current end of the options array
  */
-class IPv4Config
+void DHCPPacket::AddOption(uint8_t*& ptr, uint8_t code, uint8_t len, uint8_t* args)
 {
-public:
-	IPv4Address		m_address;
-	IPv4Address		m_netmask;
-	IPv4Address		m_broadcast;	//precomputed to save time
-	IPv4Address		m_gateway;
-};
+	//align to next word boundary
+	while(reinterpret_cast<uintptr_t>(ptr) & 3)
+	{
+		*ptr = 0x00;
+		ptr ++;
+	}
 
-class ICMPv4Protocol;
-class TCPProtocol;
-class UDPProtocol;
+	//Add the option
+	*ptr = code;
+	ptr++;
 
-#define IPV4_PAYLOAD_MTU (ETHERNET_PAYLOAD_MTU - 20)
+	//if not end, add option length and value
+	if(code != 0xff)
+	{
+		*ptr = len;
+		ptr ++;
+
+		if(len)
+		{
+			memcpy(ptr, args, len);
+			ptr += len;
+		}
+	}
+}
 
 /**
-	@brief IPv4 protocol driver
+	@brief Reads the next option (if any)
  */
-class IPv4Protocol
+bool DHCPPacket::ReadNextOption(uint8_t*& ptr, uint16_t totalLen, uint8_t& code, uint8_t& len, uint8_t*& args)
 {
-public:
-	IPv4Protocol(EthernetProtocol& eth, IPv4Config& config, ARPCache& cache);
+	//off end of packet? stop
+	uint8_t* end = (reinterpret_cast<uint8_t*>(this) + totalLen);
+	if(ptr >= end)
+		return false;
 
-	/**
-		@brief Enables reception of unicast IPv4 packets to addresses other than what we currently have configured
+	//option code
+	code = *ptr;
+	ptr++;
 
-		This is typically needed for DHCP to work.
-	 */
-	void SetAllowUnknownUnicasts(bool allow)
-	{ m_allowUnknownUnicasts = allow; }
-
-	enum ipproto_t
+	//if option is zero padding, ignore other fields
+	if(code == 0)
 	{
-		IP_PROTO_ICMP	= 1,
-		IP_PROTO_TCP	= 6,
-		IP_PROTO_UDP	= 17
-	};
+		len = 0;
+		args = nullptr;
+		return true;
+	}
 
-	IPv4Packet* GetTxPacket(IPv4Address dest, ipproto_t proto);
-	void SendTxPacket(IPv4Packet* packet, size_t upperLayerLength, bool markFree = true);
-	void ResendTxPacket(IPv4Packet* packet, bool markFree = false);
+	//if option is end, stop
+	if(code == 0xff)
+		return false;
 
-	///@brief Cancels sending of a packet
-	void CancelTxPacket(IPv4Packet* packet)
-	{ m_eth.CancelTxFrame(reinterpret_cast<EthernetFrame*>(reinterpret_cast<uint8_t*>(packet) - ETHERNET_PAYLOAD_OFFSET)); }
+	//anything else is full TLV format
+	len = *ptr;
+	ptr++;
 
-	void OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength);
+	//validate length
+	if(ptr+len >= end)
+		return false;
 
-	void OnLinkUp();
-	void OnLinkDown();
-	void OnAgingTick();
-	void OnAgingTick10x();
+	//read the argument data
+	args = ptr;
+	ptr += len;
+	return true;
+}
 
-	static uint16_t InternetChecksum(uint8_t* data, uint16_t len, uint16_t initial = 0);
-	uint16_t PseudoHeaderChecksum(IPv4Packet* packet, uint16_t length);
-
-	enum AddressType
+/**
+	@brief Walk the options list to find a specific option we expect
+ */
+bool DHCPPacket::FindOption(uint16_t totalLen, uint8_t targetCode, uint8_t& len, uint8_t*& args)
+{
+	auto ptr = GetOptions();
+	uint8_t code;
+	while(ReadNextOption(ptr, totalLen, code, len, args))
 	{
-		ADDR_BROADCAST,		//packet was for a broadcast address
-		ADDR_MULTICAST,		//packet was for a multicast address
-		ADDR_UNICAST_US,	//packet was for our IP
-		ADDR_UNICAST_OTHER	//packet was for someone else (only valid in promiscuous mode)
-	};
+		if(code == targetCode)
+			return true;
+	}
 
-	void UseICMPv4(ICMPv4Protocol* icmpv4)
-	{ m_icmpv4 = icmpv4; }
-
-	void UseTCP(TCPProtocol* tcp)
-	{ m_tcp = tcp; }
-
-	void UseUDP(UDPProtocol* udp)
-	{ m_udp = udp; }
-
-	AddressType GetAddressType(IPv4Address addr);
-	bool IsLocalSubnet(IPv4Address addr);
-
-	EthernetProtocol* GetEthernet()
-	{ return &m_eth; }
-
-	IPv4Address GetOurAddress()
-	{ return m_config.m_address; }
-
-protected:
-
-	///@brief The Ethernet protocol stack
-	EthernetProtocol& m_eth;
-
-	///@brief Our local IP address configuration
-	IPv4Config& m_config;
-
-	///@brief Cache for storing IP -> MAC associations
-	ARPCache& m_cache;
-
-	///@brief ICMPv4 protocol
-	ICMPv4Protocol* m_icmpv4;
-
-	///@brief TCP protocol
-	TCPProtocol* m_tcp;
-
-	///@brief UDP protocol
-	UDPProtocol* m_udp;
-
-	///@brief True to forward unicasts to unknown addresses to us
-	bool m_allowUnknownUnicasts;
-};
-
-#endif
+	//if we get here, not found
+	return false;
+}

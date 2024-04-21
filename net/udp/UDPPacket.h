@@ -35,6 +35,8 @@
 #ifndef UDPPacket_h
 #define UDPPacket_h
 
+#include "../ipv4/IPv4Packet.h"
+
 /**
 	@brief A UDP packet sent over IPv4
  */

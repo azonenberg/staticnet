@@ -35,6 +35,7 @@
 #ifndef UDPProtocol_h
 #define UDPProtocol_h
 
+#include "../ipv4/IPv4Protocol.h"
 #include "UDPPacket.h"
 
 #define UDP_IPV4_PAYLOAD_MTU (IPV4_PAYLOAD_MTU - 4)

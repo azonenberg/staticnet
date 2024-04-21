@@ -27,131 +27,70 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of IPv4Protocol
- */
-
-#ifndef IPv4Protocol_h
-#define IPv4Protocol_h
+#ifndef DHCPPacket_h
+#define DHCPPacket_h
 
 #include <stdint.h>
-#include "IPv4Address.h"
-#include "IPv4Packet.h"
-
-inline bool operator!= (const IPv4Address& a, const IPv4Address& b)
-{ return a.m_word != b.m_word; }
-
-inline bool operator== (const IPv4Address& a, const IPv4Address& b)
-{ return a.m_word == b.m_word; }
+#include "../net/ipv4/IPv4Address.h"
 
 /**
-	@brief IPv4 address configuration
+	@brief A DHCPv4 packet sent over UDP
  */
-class IPv4Config
+class __attribute__((packed)) DHCPPacket
 {
 public:
-	IPv4Address		m_address;
-	IPv4Address		m_netmask;
-	IPv4Address		m_broadcast;	//precomputed to save time
-	IPv4Address		m_gateway;
-};
+	uint8_t	m_op;
+	uint8_t	m_htype;
+	uint8_t	m_hlen;
+	uint8_t	m_hops;
 
-class ICMPv4Protocol;
-class TCPProtocol;
-class UDPProtocol;
+	uint32_t m_xid;
 
-#define IPV4_PAYLOAD_MTU (ETHERNET_PAYLOAD_MTU - 20)
+	uint16_t m_secs;
+	uint16_t m_flags;
 
-/**
-	@brief IPv4 protocol driver
- */
-class IPv4Protocol
-{
+	IPv4Address m_ciaddr;
+	IPv4Address m_yiaddr;
+	IPv4Address m_siaddr;
+	IPv4Address m_giaddr;
+
+	uint8_t m_chaddr[16];
+	uint8_t m_sname[64];
+	uint8_t m_file[128];
+
+	uint32_t m_magicCookie;
+
+	void ByteSwap()
+	{
+		m_xid	= __builtin_bswap32(m_xid);
+		m_secs	= __builtin_bswap16(m_secs);
+		m_flags	= __builtin_bswap16(m_flags);
+		m_magicCookie = __builtin_bswap32(m_magicCookie);
+	}
+
+	uint8_t* GetOptions()
+	{ return reinterpret_cast<uint8_t*>(this) + sizeof(*this); }
+
+	static void AddOption(uint8_t*& ptr, uint8_t code, uint8_t len, uint8_t* args);
+	bool ReadNextOption(uint8_t*& ptr, uint16_t totalLen, uint8_t& code, uint8_t& len, uint8_t*& args);
+	bool FindOption(uint16_t totalLen, uint8_t targetCode, uint8_t& len, uint8_t*& args);
+
+	//options after here
+
+	//type defines, no variables
 public:
-	IPv4Protocol(EthernetProtocol& eth, IPv4Config& config, ARPCache& cache);
-
-	/**
-		@brief Enables reception of unicast IPv4 packets to addresses other than what we currently have configured
-
-		This is typically needed for DHCP to work.
-	 */
-	void SetAllowUnknownUnicasts(bool allow)
-	{ m_allowUnknownUnicasts = allow; }
-
-	enum ipproto_t
+	enum op_t
 	{
-		IP_PROTO_ICMP	= 1,
-		IP_PROTO_TCP	= 6,
-		IP_PROTO_UDP	= 17
+		OP_DHCP_DISCOVER 	= 0x01,
+		OP_BOOT_REPLY		= 0x02,
+		OP_DHCP_REQUEST		= 0x03,
+		OP_DHCP_ACK			= 0x05
 	};
 
-	IPv4Packet* GetTxPacket(IPv4Address dest, ipproto_t proto);
-	void SendTxPacket(IPv4Packet* packet, size_t upperLayerLength, bool markFree = true);
-	void ResendTxPacket(IPv4Packet* packet, bool markFree = false);
-
-	///@brief Cancels sending of a packet
-	void CancelTxPacket(IPv4Packet* packet)
-	{ m_eth.CancelTxFrame(reinterpret_cast<EthernetFrame*>(reinterpret_cast<uint8_t*>(packet) - ETHERNET_PAYLOAD_OFFSET)); }
-
-	void OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength);
-
-	void OnLinkUp();
-	void OnLinkDown();
-	void OnAgingTick();
-	void OnAgingTick10x();
-
-	static uint16_t InternetChecksum(uint8_t* data, uint16_t len, uint16_t initial = 0);
-	uint16_t PseudoHeaderChecksum(IPv4Packet* packet, uint16_t length);
-
-	enum AddressType
+	enum htype_t
 	{
-		ADDR_BROADCAST,		//packet was for a broadcast address
-		ADDR_MULTICAST,		//packet was for a multicast address
-		ADDR_UNICAST_US,	//packet was for our IP
-		ADDR_UNICAST_OTHER	//packet was for someone else (only valid in promiscuous mode)
+		HTYPE_ETHERNET = 0x01
 	};
-
-	void UseICMPv4(ICMPv4Protocol* icmpv4)
-	{ m_icmpv4 = icmpv4; }
-
-	void UseTCP(TCPProtocol* tcp)
-	{ m_tcp = tcp; }
-
-	void UseUDP(UDPProtocol* udp)
-	{ m_udp = udp; }
-
-	AddressType GetAddressType(IPv4Address addr);
-	bool IsLocalSubnet(IPv4Address addr);
-
-	EthernetProtocol* GetEthernet()
-	{ return &m_eth; }
-
-	IPv4Address GetOurAddress()
-	{ return m_config.m_address; }
-
-protected:
-
-	///@brief The Ethernet protocol stack
-	EthernetProtocol& m_eth;
-
-	///@brief Our local IP address configuration
-	IPv4Config& m_config;
-
-	///@brief Cache for storing IP -> MAC associations
-	ARPCache& m_cache;
-
-	///@brief ICMPv4 protocol
-	ICMPv4Protocol* m_icmpv4;
-
-	///@brief TCP protocol
-	TCPProtocol* m_tcp;
-
-	///@brief UDP protocol
-	UDPProtocol* m_udp;
-
-	///@brief True to forward unicasts to unknown addresses to us
-	bool m_allowUnknownUnicasts;
 };
 
 #endif
