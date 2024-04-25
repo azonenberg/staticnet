@@ -62,6 +62,9 @@ public:
 	bool IsEnabled() const
 	{ return m_enabled; }
 
+	IPv4Address GetServerAddress()
+	{ return m_serverAddress; }
+
 	/**
 		@brief Sets the address of the time server to use
 	 */
