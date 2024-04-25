@@ -114,7 +114,7 @@ void UDPProtocol::SendTxPacket(UDPPacket* packet, uint16_t sport, uint16_t dport
 		IPv4Protocol::InternetChecksum(reinterpret_cast<uint8_t*>(packet), length, pseudoHeaderChecksum));
 
 	//Actually send it
-	m_ipv4->SendTxPacket(ipack, length, false);
+	m_ipv4->SendTxPacket(ipack, length, true);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
