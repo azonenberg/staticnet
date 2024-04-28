@@ -545,7 +545,6 @@ int crypto_sign_keypair(u8 *pk, u8 *sk)
 {
   u8 d[64];
   gf p[4];
-  int i;
 
   crypto_hash(d, sk, 32);
   d[0] &= 248;
@@ -554,7 +553,5 @@ int crypto_sign_keypair(u8 *pk, u8 *sk)
 
   scalarbase(p,d);
   pack(pk,p);
-
-  FOR(i,32) sk[32 + i] = pk[i];
   return 0;
 }
