@@ -1247,7 +1247,7 @@ void SSHTransportServer::OnRxChannelRequest(int id, TCPTableEntry* socket, SSHTr
 	}
 
 	//Request was successful, acknowledge if client wants us to
-	if(payload->WantReply())
+	if(payload->WantReply() && (m_state[id].m_sessionChannelID != INVALID_CHANNEL) )
 	{
 		auto segment = m_tcp.GetTxSegment(socket);
 		if(!segment)
