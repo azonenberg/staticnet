@@ -39,16 +39,21 @@
 #include "SSHPasswordAuthenticator.h"
 #include "SSHPubkeyAuthenticator.h"
 #include "../net/tcp/TCPServer.h"
+#include "../sftp/SFTPServer.h"
 
 class SSHTransportPacket;
 class SSHKexInitPacket;
 class SSHUserAuthRequestPacket;
 class SSHSessionRequestPacket;
 class SSHPtyRequestPacket;
+class SSHSubsystemRequestPacket;
+class SSHExecRequestPacket;
 
 #ifndef SSH_MAX_ALGLEN
 #define SSH_MAX_ALGLEN 16
 #endif
+
+#define INVALID_CHANNEL 0xffffffff
 
 /**
 	@brief State for a single SSH connection
@@ -57,7 +62,8 @@ class SSHConnectionState
 {
 public:
 	SSHConnectionState()
-		: m_crypto(NULL)
+		: m_crypto(nullptr)
+		, m_sftpState(nullptr)
 	{ Clear(); }
 
 	/**
@@ -67,17 +73,22 @@ public:
 	{
 		m_macPresent = false;
 		m_valid = false;
-		m_socket = NULL;
+		m_socket = nullptr;
 		m_state = STATE_BANNER_WAIT;
-		m_sessionChannelID = 0;
+		m_sessionChannelID = INVALID_CHANNEL;
 		m_clientWindowWidthChars = 80;
 		m_clientWindowHeightChars = 25;
 		m_rxBuffer.Reset();
 		memset(m_username, 0, SSH_MAX_USERNAME);
+		m_channelType = CHANNEL_TYPE_UNINITIALIZED;
 
 		//Zeroize crypto state
 		if(m_crypto)
 			m_crypto->Clear();
+
+		//Zeroize SFTP state
+		if(m_sftpState)
+			m_sftpState->Clear();
 	}
 
 	///@brief True if the connection is valid
@@ -104,6 +115,14 @@ public:
 
 	} m_state;
 
+	///@brief Connection type (for now, only one channel supported)
+	enum
+	{
+		CHANNEL_TYPE_UNINITIALIZED,
+		CHANNEL_TYPE_PTY,
+		CHANNEL_TYPE_SFTP
+	} m_channelType;
+
 	///@brief The crypto engine containing key material for this session
 	CryptoEngine* m_crypto;
 
@@ -127,6 +146,9 @@ public:
 
 	///@brief Username
 	char m_username[SSH_MAX_USERNAME];
+
+	///@brief SFTP state (if we're using SFTP)
+	SFTPConnectionState* m_sftpState;
 };
 
 /**
@@ -176,6 +198,15 @@ public:
 	void UsePubkeyAuthenticator(SSHPubkeyAuthenticator* auth)
 	{ m_pubkeyAuth = auth; }
 
+	/**
+		@brief Sets the SFTP server we use for file transfers
+	 */
+	void UseSFTPServer(SFTPServer* sftp)
+	{
+		m_sftpServer = sftp;
+		sftp->UseSSH(this);
+	}
+
 	virtual void GracefulDisconnect(int id, TCPTableEntry* socket) override;
 
 protected:
@@ -199,7 +230,10 @@ protected:
 	void OnRxChannelOpenSession(int id, TCPTableEntry* socket, SSHSessionRequestPacket* packet);
 	void OnRxChannelRequest(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
 	void OnRxPtyRequest(int id, SSHPtyRequestPacket* packet);
+	bool OnRxSubsystemRequest(int id, SSHSubsystemRequestPacket* packet);
 	void OnRxChannelData(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
+	void OnExecRequest(int id, TCPTableEntry* socket, SSHExecRequestPacket* packet);
+	virtual void DoExecRequest(int id, TCPTableEntry* socket, const char* cmd, uint16_t len) =0;
 
 	virtual void DropConnection(int id, TCPTableEntry* socket);
 
@@ -222,6 +256,9 @@ protected:
 
 	///@brief The authenticator for publickey logins
 	SSHPubkeyAuthenticator* m_pubkeyAuth;
+
+	///@brief The SFTP server
+	SFTPServer* m_sftpServer;
 
 	/**
 		@brief Writes a big-endian uint32_t to a buffer

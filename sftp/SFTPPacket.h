@@ -27,54 +27,87 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of SSHPtyRequestPacket
- */
-#ifndef SSHPtyRequestPacket_h
-#define SSHPtyRequestPacket_h
+#ifndef SFTPPacket_h
+#define SFTPPacket_h
 
-/**
-	@brief A SSH_MSG_CHANNEL_REQUEST packet of type "pty-req"
- */
-class __attribute__((packed)) SSHPtyRequestPacket
+class __attribute__((packed)) SFTPPacket
 {
 public:
+	void ByteSwap()
+	{ m_length = __builtin_bswap32(m_length); }
+
+	uint32_t m_length;
+	uint8_t m_type;
+
+	enum PacketType
+	{
+		SSH_FXP_INIT			= 1,
+		SSH_FXP_VERSION 		= 2,
+		SSH_FXP_OPEN			= 3,
+		SSH_FXP_CLOSE			= 4,
+		SSH_FXP_READ			= 5,
+		SSH_FXP_WRITE			= 6,
+		SSH_FXP_LSTAT			= 7,
+		SSH_FXP_FSTAT			= 8,
+		SSH_FXP_SETSTAT			= 9,
+		SSH_FXP_FSETSTAT		= 10,
+		SSH_FXP_OPENDIR			= 11,
+		SSH_FXP_READDIR			= 12,
+		SSH_FXP_REMOVE			= 13,
+		SSH_FXP_MKDIR			= 14,
+		SSH_FXP_RMDIR			= 15,
+		SSH_FXP_REALPATH		= 16,
+		SSH_FXP_STAT			= 17,
+		SSH_FXP_RENAME			= 18,
+		SSH_FXP_READLINK		= 19,
+		//20 reserved
+		SSH_FXP_LINK			= 21,
+		SSH_FXP_BLOCK			= 22,
+		SSH_FXP_UNBLOCK			= 23,
+
+		//24 - 100 reserved
+
+		SSH_FXP_STATUS			= 101,
+		SSH_FXP_HANDLE			= 102,
+		SSH_FXP_DATA			= 103,
+		SSH_FXP_NAME			= 104,
+		SSH_FXP_ATTRS			= 105,
+
+		//106 - 199 reserved
+
+		SSH_FXP_EXTENDED		= 200,
+		SSH_FXP_EXTENDED_REPLY	= 201
+
+		//202 - 255 reserved
+	};
+
+	//Access requests (common to a lot of stuff)
+	enum AceMask
+	{
+		ACE4_READ_DATA			= 0x00000001,
+		ACE4_LIST_DIRECTORY		= 0x00000001,
+		ACE4_WRITE_DATA			= 0x00000002,
+		ACE4_ADD_FILE			= 0x00000002,
+		ACE4_APPEND_DATA		= 0x00000004,
+		ACE4_ADD_SUBDIRECTORY	= 0x00000004,
+		ACE4_READ_NAMED_ATTRS	= 0x00000008,
+		AEC4_WRITE_NAMED_ATTRS	= 0x00000010,
+		ACE4_EXECUTE			= 0x00000020,
+		ACE4_DELETE_CHILD		= 0x00000040,
+		ACE4_READ_ATTRIBUTES	= 0x00000080,
+		ACE4_WRITE_ATTRIBUTES	= 0x00000100,
+		ACE4_DELETE				= 0x00010000,
+		ACE4_READ_ACL			= 0x00020000,
+		ACE4_WRITE_ACL			= 0x00040000,
+		ACE4_WRITE_OWNER		= 0x00080000,
+		ACE4_SYNCHRONIZE		= 0x00100000
+	};
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Field accessors
 
-	/**
-		@brief Gets a pointer to the start of the terminal type (NOT null terminated)
-	 */
-	char* GetTermTypeStart()
-	{ return reinterpret_cast<char*>(&m_termTypeLength) + sizeof(uint32_t); }
-
-	uint32_t GetTermTypeLength()
-	{ return __builtin_bswap32(m_termTypeLength); }
-
-	uint32_t* GetDimensions()
-	{ return reinterpret_cast<uint32_t*>(GetTermTypeStart() + GetTermTypeLength()); }
-
-	uint32_t GetTermWidthChars()
-	{ return __builtin_bswap32(GetDimensions()[0]); }
-
-	uint32_t GetTermHeightChars()
-	{ return __builtin_bswap32(GetDimensions()[1]); }
-
-	uint32_t GetTermWidthPixels()
-	{ return __builtin_bswap32(GetDimensions()[2]); }
-
-	uint32_t GetTermHeightPixels()
-	{ return __builtin_bswap32(GetDimensions()[3]); }
-
-	//terminal modes ignored for now
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Field content
-
-	///@brief Length of the terminal type
-	uint32_t m_termTypeLength;
+	uint8_t* Payload()
+	{ return reinterpret_cast<uint8_t*>(this) + sizeof(SFTPPacket); }
 };
 
 #endif

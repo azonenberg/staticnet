@@ -28,6 +28,7 @@
 ***********************************************************************************************************************/
 
 #include <stdio.h>
+#include <algorithm>
 
 #include <staticnet-config.h>
 #include "../stack/staticnet.h"
@@ -44,6 +45,8 @@
 #include "SSHChannelRequestPacket.h"
 #include "SSHChannelStatusPacket.h"
 #include "SSHPtyRequestPacket.h"
+#include "SSHSubsystemRequestPacket.h"
+#include "SSHExecRequestPacket.h"
 #include "SSHChannelDataPacket.h"
 #include "SSHDisconnectPacket.h"
 #include "SSHCurve25519KeyBlob.h"
@@ -65,16 +68,22 @@ static const char* g_authMethodList			= "publickey";	//TODO: switch for allowing
 static const char* g_strAuthMethodPassword	= "password";
 static const char* g_strAuthMethodPubkey	= "publickey";
 static const char* g_strSession				= "session";
+static const char* g_strSftp				= "sftp";
 static const char* g_strPtyReq				= "pty-req";
 static const char* g_strEnvReq				= "env-req";
+static const char* g_strEnv					= "env";
 static const char* g_strShellReq			= "shell";
+static const char* g_strSubsystemReq		= "subsystem";
+static const char* g_strExec				= "exec";
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
 
 SSHTransportServer::SSHTransportServer(TCPProtocol& tcp)
 	: TCPServer(tcp)
-	, m_passwordAuth(NULL)
+	, m_passwordAuth(nullptr)
+	, m_pubkeyAuth(nullptr)
+	, m_sftpServer(nullptr)
 {
 }
 
@@ -177,15 +186,18 @@ bool SSHTransportServer::OnRxData(TCPTableEntry* socket, uint8_t* payload, uint1
 void SSHTransportServer::GracefulDisconnect(int id, TCPTableEntry* socket)
 {
 	//Close our channel
-	auto segment = m_tcp.GetTxSegment(socket);
-	auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
-	reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_EOF;
-	auto stat = reinterpret_cast<SSHChannelStatusPacket*>(reply->Payload());
-	stat->m_clientChannel = m_state[id].m_sessionChannelID;
-	stat->ByteSwap();
-	SendEncryptedPacket(id, sizeof(SSHChannelStatusPacket), segment, reply, socket);
+	if(m_state[id].m_sessionChannelID != INVALID_CHANNEL)
+	{
+		auto segment = m_tcp.GetTxSegment(socket);
+		auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+		reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_EOF;
+		auto stat = reinterpret_cast<SSHChannelStatusPacket*>(reply->Payload());
+		stat->m_clientChannel = m_state[id].m_sessionChannelID;
+		stat->ByteSwap();
+		SendEncryptedPacket(id, sizeof(SSHChannelStatusPacket), segment, reply, socket);
+	}
 
-	//Done
+	//Clear things out for the next client
 	m_state[id].Clear();
 	m_tcp.CloseSocket(socket);
 }
@@ -648,6 +660,11 @@ void SSHTransportServer::OnRxEncryptedPacket(int id, TCPTableEntry* socket)
 
 		case SSHTransportPacket::SSH_MSG_CHANNEL_DATA:
 			OnRxChannelData(id, socket, pack);
+			break;
+
+		//we only support one channel so EOF means we disconnect
+		case SSHTransportPacket::SSH_MSG_CHANNEL_EOF:
+			GracefulDisconnect(id, socket);
 			break;
 
 		default:
@@ -1131,9 +1148,7 @@ void SSHTransportServer::OnRxChannelOpen(int id, TCPTableEntry* socket, SSHTrans
 	auto payload = packet->Payload();
 	auto len = __builtin_bswap32(*reinterpret_cast<uint32_t*>(payload));
 	if(StringMatchWithLength(g_strSession, reinterpret_cast<const char*>(payload+sizeof(uint32_t)), len))
-	{
 		OnRxChannelOpenSession(id, socket, reinterpret_cast<SSHSessionRequestPacket*>(payload));
-	}
 
 	//Unsupported type, discard it
 	else
@@ -1175,17 +1190,28 @@ void SSHTransportServer::OnRxChannelRequest(int id, TCPTableEntry* socket, SSHTr
 	}
 
 	//Check type
+	bool ok = true;
 	if(StringMatchWithLength(g_strPtyReq, payload->GetRequestTypeStart(), payload->m_requestTypeLength))
 		OnRxPtyRequest(id, reinterpret_cast<SSHPtyRequestPacket*>(payload->Payload()));
-	else if(StringMatchWithLength(g_strEnvReq, payload->GetRequestTypeStart(), payload->m_requestTypeLength))
+	else if(
+		StringMatchWithLength(g_strEnvReq, payload->GetRequestTypeStart(), payload->m_requestTypeLength) ||
+		StringMatchWithLength(g_strEnv, payload->GetRequestTypeStart(), payload->m_requestTypeLength)
+		)
 	{
 		//environment variables are ignored, but we don't error on them
 	}
 	else if(StringMatchWithLength(g_strShellReq, payload->GetRequestTypeStart(), payload->m_requestTypeLength))
 		InitializeShell(id, socket);
+	else if(StringMatchWithLength(g_strExec, payload->GetRequestTypeStart(), payload->m_requestTypeLength))
+		OnExecRequest(id, socket, reinterpret_cast<SSHExecRequestPacket*>(payload->Payload()));
+
+	else if(StringMatchWithLength(g_strSubsystemReq, payload->GetRequestTypeStart(), payload->m_requestTypeLength))
+		ok = OnRxSubsystemRequest(id, reinterpret_cast<SSHSubsystemRequestPacket*>(payload->Payload()));
+	else
+		ok = false;
 
 	//Unknown/unsupported type
-	else
+	if(!ok)
 	{
 		if(payload->WantReply())
 		{
@@ -1217,6 +1243,20 @@ void SSHTransportServer::OnRxChannelRequest(int id, TCPTableEntry* socket, SSHTr
 	}
 }
 
+void SSHTransportServer::OnExecRequest(int id, TCPTableEntry* socket, SSHExecRequestPacket* packet)
+{
+	//Excessively long command length? ignore rest of the packet
+	uint16_t cmdlen = packet->GetCommandLength();
+	if(cmdlen > 256)
+		return;
+
+	//Let the derived class actually do something with the command
+	DoExecRequest(id, socket, packet->GetCommandStart(), cmdlen);
+
+	//Done, close the connection
+	GracefulDisconnect(id, socket);
+}
+
 /**
 	@brief Handles an SSH_MSG_CHANNEL_REQUEST of type "pty-req"
  */
@@ -1225,15 +1265,37 @@ void SSHTransportServer::OnRxPtyRequest(int id, SSHPtyRequestPacket* packet)
 	//Excessively long type length? ignore rest of the packet
 	int typelen = packet->GetTermTypeLength();
 	if(typelen > 256)
-	{
 		return;
-	}
+
+	m_state[id].m_channelType = SSHConnectionState::CHANNEL_TYPE_PTY;
 
 	//For now, ignore pixel dimensions and terminal type
 
 	//Save character dimensions in the session state
 	m_state[id].m_clientWindowWidthChars = packet->GetTermWidthChars();
 	m_state[id].m_clientWindowHeightChars = packet->GetTermHeightChars();
+}
+
+/**
+	@brief Handles an SSH_MSG_CHANNEL_REQUEST of type "subsystem"
+ */
+bool SSHTransportServer::OnRxSubsystemRequest(int id, SSHSubsystemRequestPacket* packet)
+{
+	//Excessively long type length? ignore rest of the packet
+	int typelen = packet->GetNameLength();
+	if(typelen > 256)
+		return false;
+
+	//SFTP connection? Allow if we have a SFTP server to handle it
+	if(m_sftpServer && StringMatchWithLength(g_strSftp, packet->GetNameStart(), packet->GetNameLength()))
+	{
+		m_state[id].m_channelType = SSHConnectionState::CHANNEL_TYPE_SFTP;
+
+		m_sftpServer->OnConnectionAccepted(id, m_state[id].m_sftpState);
+		return true;
+	}
+
+	return false;
 }
 
 /**
@@ -1253,7 +1315,7 @@ void SSHTransportServer::OnRxChannelOpenSession(int id, TCPTableEntry* socket, S
 	auto confirm = reinterpret_cast<SSHChannelOpenConfirmationPacket*>(reply->Payload());
 	confirm->m_clientChannel = packet->m_senderChannel;
 	confirm->m_serverChannel = 0;
-	confirm->m_initialWindowSize = SSH_RX_BUFFER_SIZE;
+	confirm->m_initialWindowSize = 0xffffffff;	//max sized window
 	confirm->m_maxPacketSize = 1024;
 	confirm->ByteSwap();
 	SendEncryptedPacket(id, sizeof(SSHChannelOpenConfirmationPacket), segment, reply, socket);
@@ -1274,22 +1336,58 @@ void SSHTransportServer::OnRxChannelData(int id, TCPTableEntry* socket, SSHTrans
 	auto dpack = reinterpret_cast<SSHChannelDataPacket*>(packet->Payload());
 	dpack->ByteSwap();
 
-	//Must be from our active channel
-	if(m_state[id].m_sessionChannelID != dpack->m_clientChannel)
-	{
-		DropConnection(id, socket);
-		return;
-	}
-
 	//Sanity check packet length
-	if(dpack->m_dataLength > 1024)
+	if(dpack->m_dataLength > ETHERNET_PAYLOAD_MTU)
 	{
 		DropConnection(id, socket);
 		return;
 	}
 
-	//All good, pass it to the shell
-	OnRxShellData(id, socket, dpack->Payload(), dpack->m_dataLength);
+	//Drop anything sent to a bogus channel
+	//(this guards against a match to m_shellChannelID before we've initialized the shell, etc)
+	if(dpack->m_clientChannel == INVALID_CHANNEL)
+	{
+		DropConnection(id, socket);
+		return;
+	}
+
+	//Pass to the appropriate subsystem
+	if(dpack->m_clientChannel == m_state[id].m_sessionChannelID)
+	{
+		switch(m_state[id].m_channelType)
+		{
+			//shell session
+			case SSHConnectionState::CHANNEL_TYPE_PTY:
+				OnRxShellData(id, socket, dpack->Payload(), dpack->m_dataLength);
+				break;
+
+			//sftp session
+			case SSHConnectionState::CHANNEL_TYPE_SFTP:
+				if(m_sftpServer)
+				{
+					m_sftpServer->OnRxData(
+						id,
+						m_state[id].m_sftpState,
+						socket,
+						(uint8_t*)dpack->Payload(),
+						dpack->m_dataLength);
+				}
+				break;
+
+			//no application requested yet, or invalid - don't know what to do with it
+			case SSHConnectionState::CHANNEL_TYPE_UNINITIALIZED:
+			default:
+				break;
+		}
+	}
+
+	//Invalid channel (not an open one)
+	else
+		DropConnection(id, socket);
+
+	//TODO: keep track of how much data we've received and send SSH_MSG_CHANNEL_WINDOW_ADJUST
+	//to acknowledge it. For now, sending a huge initial window lets us go until we get 4GB of data
+	//which is probably more than we'll ever move in an embedded device on a single SSH session
 }
 
 /**

@@ -29,15 +29,15 @@
 
 /**
 	@file
-	@brief Declaration of SSHPtyRequestPacket
+	@brief Declaration of SSHExecRequestPacket
  */
-#ifndef SSHPtyRequestPacket_h
-#define SSHPtyRequestPacket_h
+#ifndef SSHExecRequestPacket_h
+#define SSHExecRequestPacket_h
 
 /**
-	@brief A SSH_MSG_CHANNEL_REQUEST packet of type "pty-req"
+	@brief A SSH_MSG_CHANNEL_REQUEST packet of type "exec"
  */
-class __attribute__((packed)) SSHPtyRequestPacket
+class __attribute__((packed)) SSHExecRequestPacket
 {
 public:
 
@@ -45,36 +45,19 @@ public:
 	// Field accessors
 
 	/**
-		@brief Gets a pointer to the start of the terminal type (NOT null terminated)
+		@brief Gets a pointer to the start of the subsystem name (NOT null terminated)
 	 */
-	char* GetTermTypeStart()
-	{ return reinterpret_cast<char*>(&m_termTypeLength) + sizeof(uint32_t); }
+	char* GetCommandStart()
+	{ return reinterpret_cast<char*>(&m_cmdLen) + sizeof(uint32_t); }
 
-	uint32_t GetTermTypeLength()
-	{ return __builtin_bswap32(m_termTypeLength); }
-
-	uint32_t* GetDimensions()
-	{ return reinterpret_cast<uint32_t*>(GetTermTypeStart() + GetTermTypeLength()); }
-
-	uint32_t GetTermWidthChars()
-	{ return __builtin_bswap32(GetDimensions()[0]); }
-
-	uint32_t GetTermHeightChars()
-	{ return __builtin_bswap32(GetDimensions()[1]); }
-
-	uint32_t GetTermWidthPixels()
-	{ return __builtin_bswap32(GetDimensions()[2]); }
-
-	uint32_t GetTermHeightPixels()
-	{ return __builtin_bswap32(GetDimensions()[3]); }
-
-	//terminal modes ignored for now
+	uint32_t GetCommandLength()
+	{ return __builtin_bswap32(m_cmdLen); }
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Field content
 
 	///@brief Length of the terminal type
-	uint32_t m_termTypeLength;
+	uint32_t m_cmdLen;
 };
 
 #endif

@@ -27,54 +27,72 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of SSHPtyRequestPacket
- */
-#ifndef SSHPtyRequestPacket_h
-#define SSHPtyRequestPacket_h
+#ifndef SFTPOpenPacket_h
+#define SFTPOpenPacket_h
 
-/**
-	@brief A SSH_MSG_CHANNEL_REQUEST packet of type "pty-req"
- */
-class __attribute__((packed)) SSHPtyRequestPacket
+class __attribute__((packed)) SFTPOpenPacket
 {
 public:
+
+	void ByteSwap()
+	{ m_requestid = __builtin_bswap32(m_requestid); }
+
+	uint32_t m_requestid;
+
+	uint32_t m_pathLength;
+
+	enum OpenFlags
+	{
+		SSH_FXF_ACCESS_DISPOSITION		= 0x00000007,
+
+		SSH_FXF_CREATE_NEW				= 0x00000000,
+		SSH_FXF_CREATE_TRUNCATE			= 0x00000001,
+		SSH_FXF_OPEN_EXISTING			= 0x00000002,
+		SSH_FXF_OPEN_OR_CREATE			= 0x00000003,
+		SSH_FXF_TRUNCATE_EXISTING		= 0x00000004,
+		SSH_FXF_APPEND_DATA				= 0x00000008,
+		SSH_FXF_APPEND_DATA_ATOMIC		= 0x00000010,
+		SSH_FXF_TEXT_MODE				= 0x00000020,
+		SSH_FXF_BLOCK_READ				= 0x00000040,
+		SSH_FXF_BLOCK_WRITE				= 0x00000080,
+		SSH_FXF_BLOCK_DELETE			= 0x00000100,
+		SSH_FXF_BLOCK_ADVISORY			= 0x00000200,
+		SSH_FXF_NOFOLLOW				= 0x00000400,
+		SSH_FXF_DELETE_ON_CLOSE			= 0x00000800,
+		SSH_FXF_ACCESS_AUDIT_ALARM_INFO	= 0x00001000,
+		SSH_FXF_ACCESS_BACKUP			= 0x00002000,
+		SSH_FXF_BACKUP_STREAM			= 0x00004000,
+		SSH_FXF_OVERRIDE_OWNER			= 0x00008000
+	};
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Field accessors
 
-	/**
-		@brief Gets a pointer to the start of the terminal type (NOT null terminated)
-	 */
-	char* GetTermTypeStart()
-	{ return reinterpret_cast<char*>(&m_termTypeLength) + sizeof(uint32_t); }
+	///@brief Gets a pointer to the start of the path (NOT null terminated)
+	char* GetPathStart()
+	{ return reinterpret_cast<char*>(&m_pathLength) + sizeof(uint32_t); }
 
-	uint32_t GetTermTypeLength()
-	{ return __builtin_bswap32(m_termTypeLength); }
+	///@brief Gets the length of the path
+	uint32_t GetPathLength()
+	{ return __builtin_bswap32(m_pathLength); }
 
-	uint32_t* GetDimensions()
-	{ return reinterpret_cast<uint32_t*>(GetTermTypeStart() + GetTermTypeLength()); }
+	///@brief Gets the desired access to the file
+	uint32_t GetDesiredAccess()
+	{
+		if(GetPathLength() > MAX_PATH)
+			return 0;
+		return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetPathStart() + GetPathLength()));
+	}
 
-	uint32_t GetTermWidthChars()
-	{ return __builtin_bswap32(GetDimensions()[0]); }
+	//Get the flags
+	uint32_t GetFlags()
+	{
+		if(GetPathLength() > MAX_PATH)
+			return 0;
+		return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetPathStart() + GetPathLength() + sizeof(uint32_t)));
+	}
 
-	uint32_t GetTermHeightChars()
-	{ return __builtin_bswap32(GetDimensions()[1]); }
-
-	uint32_t GetTermWidthPixels()
-	{ return __builtin_bswap32(GetDimensions()[2]); }
-
-	uint32_t GetTermHeightPixels()
-	{ return __builtin_bswap32(GetDimensions()[3]); }
-
-	//terminal modes ignored for now
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Field content
-
-	///@brief Length of the terminal type
-	uint32_t m_termTypeLength;
+	//TODO: attributes
 };
 
 #endif

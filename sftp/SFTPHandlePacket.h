@@ -27,54 +27,29 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of SSHPtyRequestPacket
- */
-#ifndef SSHPtyRequestPacket_h
-#define SSHPtyRequestPacket_h
+#ifndef SFTPHandlePacket_h
+#define SFTPHandlePacket_h
 
-/**
-	@brief A SSH_MSG_CHANNEL_REQUEST packet of type "pty-req"
- */
-class __attribute__((packed)) SSHPtyRequestPacket
+class __attribute__((packed)) SFTPHandlePacket
 {
 public:
+	SFTPHandlePacket()
+	: m_handleLen(4)
+	{}
 
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Field accessors
+	void ByteSwap()
+	{
+		m_requestid = __builtin_bswap32(m_requestid);
+		m_handleLen = __builtin_bswap32(m_handleLen);
+	}
 
-	/**
-		@brief Gets a pointer to the start of the terminal type (NOT null terminated)
-	 */
-	char* GetTermTypeStart()
-	{ return reinterpret_cast<char*>(&m_termTypeLength) + sizeof(uint32_t); }
+	uint32_t m_requestid;
 
-	uint32_t GetTermTypeLength()
-	{ return __builtin_bswap32(m_termTypeLength); }
-
-	uint32_t* GetDimensions()
-	{ return reinterpret_cast<uint32_t*>(GetTermTypeStart() + GetTermTypeLength()); }
-
-	uint32_t GetTermWidthChars()
-	{ return __builtin_bswap32(GetDimensions()[0]); }
-
-	uint32_t GetTermHeightChars()
-	{ return __builtin_bswap32(GetDimensions()[1]); }
-
-	uint32_t GetTermWidthPixels()
-	{ return __builtin_bswap32(GetDimensions()[2]); }
-
-	uint32_t GetTermHeightPixels()
-	{ return __builtin_bswap32(GetDimensions()[3]); }
-
-	//terminal modes ignored for now
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Field content
-
-	///@brief Length of the terminal type
-	uint32_t m_termTypeLength;
+	//this is actually a string at the protocol layer
+	//to simplify things, we always use fixed 32-bit handles
+	uint32_t m_handleLen;
+	uint32_t m_handleValue;
 };
 
 #endif
+

@@ -27,54 +27,68 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of SSHPtyRequestPacket
- */
-#ifndef SSHPtyRequestPacket_h
-#define SSHPtyRequestPacket_h
+#ifndef SFTPStatusPacket_h
+#define SFTPStatusPacket_h
 
-/**
-	@brief A SSH_MSG_CHANNEL_REQUEST packet of type "pty-req"
- */
-class __attribute__((packed)) SSHPtyRequestPacket
+class __attribute__((packed)) SFTPStatusPacket
 {
 public:
+	SFTPStatusPacket()
+	{
+		m_msgLen = 0;
+		m_langLen = 0;
+	}
 
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Field accessors
+	enum Status
+	{
+		SSH_FX_OK 							= 0,
+		SSH_FX_EOF							= 1,
+		SSH_FX_NO_SUCH_FILE					= 2,
+		SSH_FX_PERMISSION_DENIED			= 3,
+		SSH_FX_FAILURE						= 4,
+		SSH_FX_BAD_MESSAGE					= 5,
+		SSH_FX_NO_CONNECTION				= 6,
+		SSH_FX_CONNECTION_LOST				= 7,
+		SSH_FX_OP_UNSUPPORTED				= 8,
+		SSH_FX_INVALID_HANDLE				= 9,
+		SSH_FX_NO_SUCH_PATH					= 10,
+		SSH_FX_FILE_ALREADY_EXISTS			= 11,
+		SSH_FX_WRITE_PROTECT				= 12,
+		SSH_FX_NO_MEDIA						= 13,
+		SSH_FX_NO_SPACE_ON_FILESYSTEM		= 14,
+		SSH_FX_QUOTA_EXCEEDED				= 15,
+		SSH_FX_UNKNOWN_PRINCIPAL			= 16,
+		SSH_FX_LOCK_CONFLICT				= 17,
+		SSH_FX_DIR_NOT_EMPTY				= 18,
+		SSH_FX_NOT_A_DIRECTORY				= 19,
+		SSH_FX_INVALID_FILENAME				= 20,
+		SSH_FX_LINK_LOOP					= 21,
+		SSH_FX_CANNOT_DELETE				= 22,
+		SSH_FX_INVALID_PARAMETER			= 23,
+		SSH_FX_FILE_IS_A_DIRECTORY			= 24,
+		SSH_FX_BYTE_RANGE_LOCK_CONFLICT		= 25,
+		SSH_FX_BYTE_RANGE_LOCK_REFUSED		= 26,
+		SSH_FX_DELETE_PENDING				= 27,
+		SSH_FX_FILE_CORRUPT					= 28,
+		SSH_FX_OWNER_INVALID				= 29,
+		SSH_FX_GROUP_INVALID				= 30,
+		SSH_FX_NO_MATCHING_BYTE_RANGE_LOCK	= 31
+	};
 
-	/**
-		@brief Gets a pointer to the start of the terminal type (NOT null terminated)
-	 */
-	char* GetTermTypeStart()
-	{ return reinterpret_cast<char*>(&m_termTypeLength) + sizeof(uint32_t); }
+	void ByteSwap()
+	{
+		m_requestid = __builtin_bswap32(m_requestid);
+		m_errorCode = __builtin_bswap32(m_errorCode);
+	}
 
-	uint32_t GetTermTypeLength()
-	{ return __builtin_bswap32(m_termTypeLength); }
+	uint32_t m_requestid;
 
-	uint32_t* GetDimensions()
-	{ return reinterpret_cast<uint32_t*>(GetTermTypeStart() + GetTermTypeLength()); }
+	uint32_t m_errorCode;
 
-	uint32_t GetTermWidthChars()
-	{ return __builtin_bswap32(GetDimensions()[0]); }
-
-	uint32_t GetTermHeightChars()
-	{ return __builtin_bswap32(GetDimensions()[1]); }
-
-	uint32_t GetTermWidthPixels()
-	{ return __builtin_bswap32(GetDimensions()[2]); }
-
-	uint32_t GetTermHeightPixels()
-	{ return __builtin_bswap32(GetDimensions()[3]); }
-
-	//terminal modes ignored for now
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Field content
-
-	///@brief Length of the terminal type
-	uint32_t m_termTypeLength;
+	//For now: no error message or languages
+	uint32_t m_msgLen;
+	uint32_t m_langLen;
 };
 
 #endif
+
