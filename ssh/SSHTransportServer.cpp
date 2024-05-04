@@ -185,29 +185,38 @@ bool SSHTransportServer::OnRxData(TCPTableEntry* socket, uint8_t* payload, uint1
  */
 void SSHTransportServer::GracefulDisconnect(int id, TCPTableEntry* socket)
 {
-	//Close our channel
+	//Close our channel (if open)
 	if(m_state[id].m_sessionChannelID != INVALID_CHANNEL)
 	{
 		auto segment = m_tcp.GetTxSegment(socket);
 		auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
-		reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_EOF;
+		reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_CLOSE;
 		auto stat = reinterpret_cast<SSHChannelStatusPacket*>(reply->Payload());
 		stat->m_clientChannel = m_state[id].m_sessionChannelID;
 		stat->ByteSwap();
 		SendEncryptedPacket(id, sizeof(SSHChannelStatusPacket), segment, reply, socket);
+
+		//channel is now invalid, don't send anything else to it
+		m_state[id].m_sessionChannelID = INVALID_CHANNEL;
 	}
 
-	//Clear things out for the next client
-	m_state[id].Clear();
-	m_tcp.CloseSocket(socket);
+	//Do not actually close the socket until we get a SSH_MSG_DISCONNECT from the client
 }
 
 /**
-	@brief Silently drops a connection due to a protocol error or similar
+	@brief Drops a connection due to a protocol error or similar
  */
 void SSHTransportServer::DropConnection(int id, TCPTableEntry* socket)
 {
-	//TODO: send SSH_MSG_DISCONNECT?
+	auto segment = m_tcp.GetTxSegment(socket);
+	auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+	reply->m_type = SSHTransportPacket::SSH_MSG_DISCONNECT;
+	auto disc = reinterpret_cast<SSHDisconnectPacket*>(reply->Payload());
+	disc->m_reasonCode = SSHDisconnectPacket::SSH_DISCONNECT_BY_APPLICATION;
+	disc->m_descriptionLengthAlwaysZero = 0;
+	disc->m_languageTagAlwaysZero = 0;
+	disc->ByteSwap();
+	SendEncryptedPacket(id, sizeof(SSHDisconnectPacket), segment, reply, socket);
 
 	m_state[id].Clear();
 	m_tcp.CloseSocket(socket);
@@ -218,6 +227,10 @@ void SSHTransportServer::DropConnection(int id, TCPTableEntry* socket)
  */
 void SSHTransportServer::SendSessionData(int id, TCPTableEntry* socket, const char* data, uint16_t length)
 {
+	//abort if we dont have a valid session
+	if(m_state[id].m_sessionChannelID == INVALID_CHANNEL)
+		return;
+
 	//max 1K per packet for now
 	if(length > 1024)
 		return;
@@ -635,7 +648,8 @@ void SSHTransportServer::OnRxEncryptedPacket(int id, TCPTableEntry* socket)
 	switch(pack->m_type)
 	{
 		case SSHTransportPacket::SSH_MSG_DISCONNECT:
-			DropConnection(id, socket);
+			m_state[id].Clear();
+			m_tcp.CloseSocket(socket);
 			return;
 
 		case SSHTransportPacket::SSH_MSG_IGNORE:
@@ -662,7 +676,11 @@ void SSHTransportServer::OnRxEncryptedPacket(int id, TCPTableEntry* socket)
 			OnRxChannelData(id, socket, pack);
 			break;
 
-		//we only support one channel so EOF means we disconnect
+		//we only support one channel so EOF or close means we disconnect
+		case SSHTransportPacket::SSH_MSG_CHANNEL_CLOSE:
+			m_state[id].m_sessionChannelID = INVALID_CHANNEL;
+			break;
+
 		case SSHTransportPacket::SSH_MSG_CHANNEL_EOF:
 			GracefulDisconnect(id, socket);
 			break;
