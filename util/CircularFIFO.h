@@ -78,7 +78,7 @@ public:
 
 		Writes are all-or-nothing. If len > WriteSize() this function returns false and the FIFO state is unmodified.
 	 */
-	bool Push(uint8_t* data, uint16_t len)
+	bool Push(const uint8_t* data, uint16_t len)
 	{
 		if(len > WriteSize())
 			return false;
