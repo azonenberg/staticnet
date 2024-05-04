@@ -40,10 +40,10 @@
 /**
 	@brief A circular buffer for storing byte-stream data which supports arbitrary length reads, writes, and peeks.
 
-	Pointers are 16 bit to reduce the memory footprint. One extra address is required to distinguish between
-	empty and full positions so the maximum legal value for SIZE is 2^16 - 1.
+	Pointers are 16 bit to reduce the memory footprint. One extra bit is required to distinguish between
+	empty and full positions so the maximum legal value for SIZE is 2^15-1.
 
-	This class has no interlocks and is not thread/interrupt safe.
+	This class has no interlocks and is not thread/interrupt safe without external locks.
  */
 template<uint16_t SIZE>
 class CircularFIFO
@@ -65,7 +65,7 @@ public:
 		@brief Returns the number of bytes of data available to read
 	 */
 	uint16_t ReadSize()
-	{ return m_writePtr - m_readPtr; }
+	{ return (m_writePtr - m_readPtr) % SIZE; }
 
 	/**
 		@brief Returns the number of bytes of free buffer space
@@ -100,7 +100,7 @@ public:
 		if(WriteSize() == 0)
 			return false;
 
-		m_data[m_writePtr] = c;
+		m_data[m_writePtr % SIZE] = c;
 		m_writePtr = IncrementPointer(m_writePtr);
 		return true;
 	}
@@ -113,8 +113,16 @@ public:
 		if(ReadSize() == 0)
 			return 0;
 
-		uint8_t ret = m_data[m_readPtr];
+		uint8_t ret = m_data[m_readPtr % SIZE];
 		m_readPtr = IncrementPointer(m_readPtr);
+
+		//HACK: Reset pointers so they don't wrap
+		if(m_readPtr == m_writePtr)
+		{
+			m_writePtr = 0;
+			m_readPtr = 0;
+		}
+
 		return ret;
 	}
 
@@ -135,11 +143,11 @@ public:
 	/**
 		@brief Rotates the buffer such that the read pointer is now at zero and returns a pointer to the data
 	 */
+	__attribute__((noinline))
 	uint8_t* Rewind()
 	{
 		//Figure out how many spaces we need to rewind the buffer by
 		uint16_t nbytes = ReadSize();
-		//uint16_t nrotate = m_readPtr;
 
 		//If we're already rewound, we're done already
 		if(m_readPtr == 0)
@@ -152,9 +160,10 @@ public:
 		//Easy case: buffer hasn't wrapped past zero yet
 		//Just move the data left in place
 		else if(m_writePtr > m_readPtr)
-			memmove(m_data, m_data + m_readPtr, nbytes);
+			memmove(m_data, m_data + (m_readPtr % SIZE), nbytes);
 
 		//Hard case: there's data where we want to go
+		//TODO implement this (may need to iterate)
 		else
 		{
 			while(1)
@@ -170,10 +179,10 @@ public:
 protected:
 
 	/**
-		@brief Increments a pointer mod our buffer size
+		@brief Increments a pointer mod our pointer size
 	 */
 	uint16_t IncrementPointer(uint16_t p)
-	{ return (p + 1) % SIZE; }
+	{ return (p + 1) % (2*SIZE); }
 
 	uint16_t m_writePtr;
 	uint16_t m_readPtr;
