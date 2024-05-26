@@ -71,6 +71,8 @@ class IPv4Protocol
 public:
 	IPv4Protocol(EthernetProtocol& eth, IPv4Config& config, ARPCache& cache);
 
+	IPv4Protocol(const IPv4Protocol& rhs) =delete;
+
 	/**
 		@brief Enables reception of unicast IPv4 packets to addresses other than what we currently have configured
 
