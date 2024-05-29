@@ -106,11 +106,12 @@ public:
 		STATE_KEX_INIT_SENT,		//Got the banner, we sent our kex init message to the client
 		STATE_KEX_ECDHINIT_SENT,	//Got the client's ECDH ephemeral key and sent ours
 
+		//here and beyond is encrypted / MAC'd
 		STATE_UNAUTHENTICATED,		//Keys created, session is active, but not authenticated yet
 		STATE_AUTH_IN_PROGRESS,		//Sent the service accept for auth
 		STATE_AUTHENTICATED,		//Authentication successful
 
-		//TODO
+		//illegal
 		STATE_INVALID
 
 	} m_state;
@@ -210,7 +211,6 @@ public:
 	virtual void GracefulDisconnect(int id, TCPTableEntry* socket) override;
 
 protected:
-
 	void OnRxBanner(int id, TCPTableEntry* socket);
 	void OnRxKexInit(int id, TCPTableEntry* socket);
 	bool ValidateKexInit(SSHKexInitPacket* kex, uint16_t len);

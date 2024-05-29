@@ -130,7 +130,10 @@ bool SSHTransportServer::OnRxData(TCPTableEntry* socket, uint8_t* payload, uint1
 
 	//Push the segment data into our RX FIFO
 	if(!m_state[id].m_rxBuffer.Push(payload, payloadLen))
+	{
+		DropConnection(id, socket);
 		return false;
+	}
 
 	//If waiting for a client banner, special handling needed (not the normal packet format)
 	if(m_state[id].m_state == SSHConnectionState::STATE_BANNER_WAIT)
@@ -1383,12 +1386,15 @@ void SSHTransportServer::OnRxChannelData(int id, TCPTableEntry* socket, SSHTrans
 			case SSHConnectionState::CHANNEL_TYPE_SFTP:
 				if(m_sftpServer)
 				{
-					m_sftpServer->OnRxData(
+					if(!m_sftpServer->OnRxData(
 						id,
 						m_state[id].m_sftpState,
 						socket,
 						(uint8_t*)dpack->Payload(),
-						dpack->m_dataLength);
+						dpack->m_dataLength))
+					{
+						DropConnection(id, socket);
+					}
 				}
 				break;
 
@@ -1442,7 +1448,12 @@ bool SSHTransportServer::IsPacketReady(SSHConnectionState& state)
 		return false;
 
 	uint32_t reallen = __builtin_bswap32(*reinterpret_cast<uint32_t*>(data));
-	if(available >= (4+reallen))	//extra 4 bytes for the length field itself
+
+	uint32_t actualPacketSize = 4 + reallen; //extra 4 bytes for the length field itself
+	if(state.m_state >= SSHConnectionState::STATE_UNAUTHENTICATED)
+		actualPacketSize += GCM_TAG_SIZE;	//need to make sure we have space for the MAC too
+
+	if(available >= actualPacketSize)
 		return true;
 
 	//TODO: don't wait forever if client sends a packet bigger than our buffer
