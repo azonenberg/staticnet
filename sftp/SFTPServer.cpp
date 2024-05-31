@@ -214,10 +214,16 @@ void SFTPServer::OnRxOpen(
 	SFTPOpenPacket* pack)
 {
 	auto path = pack->GetPathStart();
+	auto len = pack->GetPathLength();
+	if(len >= MAX_PATH)
+	{
+		SendStatusReply(id, socket, pack->m_requestid, SFTPStatusPacket::SSH_FX_INVALID_PARAMETER);
+		return;
+	}
 
 	//Copy path to null terminated buffer
 	char spath[MAX_PATH] = {0};
-	strncpy(spath, path, std::min((uint32_t)(MAX_PATH-1), pack->GetPathLength()));
+	strncpy(spath, path, len);
 
 	//Reject with an access-denied error if the derived class doesn't like the request
 	if(!CanOpenFile(spath, pack->GetDesiredAccess(), pack->GetFlags()))
