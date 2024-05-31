@@ -57,7 +57,7 @@ public:
 	{
 		if(GetPathLength() > MAX_PATH)
 			return 0;
-		return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetPathStart() + GetPathLength()));
+		return UnalignedLoad32BE(GetPathStart() + GetPathLength());
 	}
 };
 

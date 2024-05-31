@@ -82,12 +82,7 @@ public:
 		if(GetPathLength() > MAX_PATH)
 			return 0;
 
-		//ugly casting since variable length path may mean this is unaligned
-		//and gcc will sometimes try to generate a ldrd instead of a ldr here... why??
-		char* tmp = GetPathStart() + GetPathLength();
-		uint32_t n;
-		memcpy(&n, tmp, sizeof(n));
-		return __builtin_bswap32(n);
+		return UnalignedLoad32BE(GetPathStart() + GetPathLength());
 	}
 
 	//Get the flags
@@ -96,12 +91,7 @@ public:
 		if(GetPathLength() > MAX_PATH)
 			return 0;
 
-		//ugly casting since variable length path may mean this is unaligned
-		//and gcc will sometimes try to generate a ldrd instead of a ldr here... why??
-		char* tmp = GetPathStart() + GetPathLength() + sizeof(uint32_t);
-		uint32_t n;
-		memcpy(&n, tmp, sizeof(n));
-		return __builtin_bswap32(n);
+		return UnalignedLoad32BE(GetPathStart() + GetPathLength() + sizeof(uint32_t));
 	}
 
 	//TODO: attributes

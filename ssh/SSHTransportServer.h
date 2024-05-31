@@ -56,6 +56,18 @@ class SSHExecRequestPacket;
 #define INVALID_CHANNEL 0xffffffff
 
 /**
+	@brief Helper function for loading a 32-bit network-byte-order value that might not be on a 32-bit aligned boundary
+
+	On ARMv7-M should compile to a single ldr instruction
+ */
+inline uint32_t UnalignedLoad32BE(void* ptr)
+{
+	uint32_t n;
+	memcpy(&n, ptr, sizeof(n));
+	return __builtin_bswap32(n);
+}
+
+/**
 	@brief State for a single SSH connection
  */
 class SSHConnectionState

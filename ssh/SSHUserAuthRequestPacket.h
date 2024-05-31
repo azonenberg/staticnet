@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -69,7 +69,7 @@ public:
 		@brief Gets the length of the service name
 	 */
 	uint32_t GetServiceNameLength()
-	{ return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetServiceNameStart() - sizeof(uint32_t))); }
+	{ return UnalignedLoad32BE(GetServiceNameStart() - sizeof(uint32_t)); }
 
 	/**
 		@brief Gets a pointer to the start of the auth type (NOT null terminated)
@@ -81,7 +81,7 @@ public:
 		@brief Gets the length of the auth type
 	 */
 	uint32_t GetAuthTypeLength()
-	{ return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetAuthTypeStart() - sizeof(uint32_t))); }
+	{ return UnalignedLoad32BE(GetAuthTypeStart() - sizeof(uint32_t)); }
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Password auth specific
@@ -96,7 +96,7 @@ public:
 		@brief Gets the length of the auth type
 	 */
 	uint32_t GetPasswordLength()
-	{ return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetPasswordStart() - sizeof(uint32_t))); }
+	{ return UnalignedLoad32BE(GetPasswordStart() - sizeof(uint32_t)); }
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Pubkey auth specific
@@ -113,7 +113,7 @@ public:
 		@brief Gets the length of the pubkey algorithm type
 	 */
 	uint32_t GetAlgorithmLength()
-	{ return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetAlgorithmStart() - sizeof(uint32_t))); }
+	{ return UnalignedLoad32BE(GetAlgorithmStart() - sizeof(uint32_t)); }
 
 	/**
 		@brief Gets a pointer to the start of the algorithm length (NOT null terminated)
@@ -125,7 +125,7 @@ public:
 		@brief Gets the length of the pubkey blob
 	 */
 	uint32_t GetKeyBlobLength()
-	{ return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetKeyBlobStart() - sizeof(uint32_t))); }
+	{ return UnalignedLoad32BE(GetKeyBlobStart() - sizeof(uint32_t)); }
 
 	/**
 		@brief Gets a pointer to the start of the key blob
@@ -137,7 +137,7 @@ public:
 		@brief Gets the length of the signature
 	 */
 	uint32_t GetSignatureLength()
-	{ return __builtin_bswap32(*reinterpret_cast<uint32_t*>(GetSignatureStart() - sizeof(uint32_t))); }
+	{ return UnalignedLoad32BE(GetSignatureStart() - sizeof(uint32_t)); }
 
 	/**
 		@brief Gets a pointer to the start of the signature
