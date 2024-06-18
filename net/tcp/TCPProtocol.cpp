@@ -378,7 +378,8 @@ void TCPProtocol::SendSegment(TCPTableEntry* state, TCPSegment* segment, IPv4Pac
 	auto pseudoHeaderChecksum = m_ipv4->PseudoHeaderChecksum(packet, length);
 
 	//Make an note of what ACK number we just sent
-	state->m_remoteSeqSent = state->m_remoteSeq;
+	if(state)
+		state->m_remoteSeqSent = state->m_remoteSeq;
 
 	//Need to be in network byte order before we send
 	segment->ByteSwap();
