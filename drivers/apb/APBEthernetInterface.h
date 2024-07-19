@@ -35,7 +35,7 @@
 #ifndef APBEthernetInterface_h
 #define APBEthernetInterface_h
 
-#include <util/FIFO.h>
+#include <embedded-utils/FIFO.h>
 #include <staticnet/drivers/base/EthernetInterface.h>
 
 #include <APB_EthernetRxBuffer.h>
