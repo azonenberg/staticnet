@@ -108,6 +108,9 @@ void UDPProtocol::SendTxPacket(UDPPacket* packet, uint16_t sport, uint16_t dport
 	auto ipack = packet->Parent();
 	auto pseudoHeaderChecksum = m_ipv4->PseudoHeaderChecksum(ipack, length);
 
+	//Zeroize the checksum when computing it
+	packet->m_checksum = 0;
+
 	//Need to be in network byte order before we send
 	packet->ByteSwap();
 	packet->m_checksum = ~__builtin_bswap16(
