@@ -145,9 +145,13 @@ EthernetFrame* APBEthernetInterface::GetRxFrame()
 
 	//Read it
 	//TODO: DMA optimizations
+	//Round transaction length up to an integer number of 32-bit words to force 32-bit copies
 	auto frame = m_rxFreeList.Pop();
 	frame->SetLength(len);
-	memcpy(frame->RawData(), (void*)&m_rxBuf->rx_buf, len);
+	uint32_t padlen = len;
+	if(padlen % 4)
+		padlen = (padlen | 3) + 1;
+	memcpy(frame->RawData(), (void*)&m_rxBuf->rx_buf, padlen);
 	m_rxBuf->rx_pop = 1;
 
 	return frame;
