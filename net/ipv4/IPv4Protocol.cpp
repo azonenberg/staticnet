@@ -74,7 +74,8 @@ uint16_t IPv4Protocol::InternetChecksum(uint8_t* data, uint16_t len, uint16_t in
 		checksum += __builtin_bswap16(*reinterpret_cast<uint8_t*>(data16));
 
 	//Handle carry-out
-	checksum = (checksum >> 16) + (checksum & 0xffff);
+	while(checksum > 0xffff)
+		checksum = (checksum >> 16) + (checksum & 0xffff);
 	return checksum;
 }
 
