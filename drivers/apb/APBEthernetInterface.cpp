@@ -83,7 +83,7 @@ void APBEthernetInterface::Init()
 
 		//Do high level configuration of the DMA channel (same for every packet)
 		auto& chan = _MDMA.channels[m_dmaChannel->GetIndex()];
-		chan.TCR =
+		chan.TCR = MDMA_TCR_BWM |
 			MDMA_TCR_SWRM | MDMA_TCR_TRGM_LINK | MDMA_TCR_PKE |
 			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
 			MDMA_TCR_DEST_SIZE_32 | MDMA_TCR_SRC_SIZE_16 |
@@ -94,7 +94,7 @@ void APBEthernetInterface::Init()
 		chan.TBR = MDMA_TBR_DEST_AXI | MDMA_TBR_SRC_TCM;
 
 		//Configure DMA for the packet data
-		g_sendPacketDataDmaConfig.TCR =
+		g_sendPacketDataDmaConfig.TCR = MDMA_TCR_BWM |
 			MDMA_TCR_SWRM | MDMA_TCR_TRGM_LINK | MDMA_TCR_PKE |
 			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
 			MDMA_TCR_DEST_SIZE_32 | MDMA_TCR_SRC_SIZE_16 |
@@ -112,7 +112,7 @@ void APBEthernetInterface::Init()
 		g_sendPacketDataDmaConfig.field_1c = 0;
 
 		//Configure DMA for the commit flag
-		g_sendCommitFlagDmaConfig.TCR =
+		g_sendCommitFlagDmaConfig.TCR = MDMA_TCR_BWM |
 			MDMA_TCR_SWRM | MDMA_TCR_TRGM_LINK | MDMA_TCR_PKE |
 			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
 			MDMA_TCR_DEST_SIZE_32 | MDMA_TCR_SRC_SIZE_16 |
@@ -132,7 +132,6 @@ void APBEthernetInterface::Init()
 		g_sendCommitFlagDmaConfig.LAR = 0;	//no subsequent transfer
 		g_sendCommitFlagDmaConfig.field_1c = 0;
 		g_ethCommitFlag = 1;
-
 
 	#endif
 }
