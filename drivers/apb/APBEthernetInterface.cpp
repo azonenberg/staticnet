@@ -37,6 +37,13 @@
 #include <embedded-utils/Logger.h>
 extern Logger g_log;
 
+//New MDMA channel configurations for linked list format
+__attribute__((aligned(16))) mdma_linkedlist_t g_sendCommitFlagDmaConfig;
+__attribute__((aligned(16))) mdma_linkedlist_t g_sendPacketDataDmaConfig;
+
+__attribute__((section(".tcmbss"))) uint32_t g_ethCommitFlag;
+__attribute__((section(".tcmbss"))) uint32_t g_ethPacketLen;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
 
@@ -45,6 +52,7 @@ APBEthernetInterface::APBEthernetInterface(
 	volatile APB_EthernetTxBuffer_10G* txbuf)
 	: m_rxBuf(rxbuf)
 	, m_txBuf(txbuf)
+	, m_dmaTxFrame(nullptr)
 {
 	for(int i=0; i<APB_TX_BUFCOUNT; i++)
 		m_txFreeList.Push(&m_txBuffers[i]);
@@ -57,6 +65,76 @@ APBEthernetInterface::APBEthernetInterface(
 APBEthernetInterface::~APBEthernetInterface()
 {
 	//nothing here
+}
+
+void APBEthernetInterface::Init()
+{
+	#ifdef HAVE_MDMA
+
+		//Requeast a DMA channel. If we can't get one, fail
+		m_dmaChannel = g_mdma.AllocateChannel();
+		if(!m_dmaChannel)
+		{
+			g_log(Logger::ERROR, "APBEthernetInterface::Init(): fatal error, no MDMA channels available\n");
+			while(1)
+			{}
+		}
+		g_log("APBEthernetInterface is using MDMA channel %d\n", m_dmaChannel->GetIndex());
+
+		//Do high level configuration of the DMA channel (same for every packet)
+		auto& chan = _MDMA.channels[m_dmaChannel->GetIndex()];
+		chan.TCR =
+			MDMA_TCR_SWRM | MDMA_TCR_TRGM_LINK | MDMA_TCR_PKE |
+			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
+			MDMA_TCR_DEST_SIZE_32 | MDMA_TCR_SRC_SIZE_16 |
+			MDMA_TCR_DEST_INC | MDMA_TCR_SRC_INC |
+			(1 << 12) |	//move two 16-bit words at a time from the source
+			(0 << 15) |	//move one 32-bit word to the destination
+			(3 << 18);	//move 4 bytes at a time
+		chan.TBR = MDMA_TBR_DEST_AXI | MDMA_TBR_SRC_TCM;
+
+		//Configure DMA for the packet data
+		g_sendPacketDataDmaConfig.TCR =
+			MDMA_TCR_SWRM | MDMA_TCR_TRGM_LINK | MDMA_TCR_PKE |
+			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
+			MDMA_TCR_DEST_SIZE_32 | MDMA_TCR_SRC_SIZE_16 |
+			MDMA_TCR_DEST_INC | MDMA_TCR_SRC_INC |
+			(1 << 12) |	//move two 16-bit words at a time from the source
+			(0 << 15) |	//move one 32-bit word to the destination
+			(3 << 18);	//move 4 bytes at a time
+		//BNDTR is updated at packet send time
+		g_sendPacketDataDmaConfig.TBR = MDMA_TBR_DEST_AXI | MDMA_TBR_SRC_TCM;
+		//SAR and DAR are updated at packet send time
+		g_sendPacketDataDmaConfig.BRUR = 0;
+		g_sendPacketDataDmaConfig.MAR = 0;
+		g_sendPacketDataDmaConfig.MDR = 0;
+		g_sendPacketDataDmaConfig.LAR = reinterpret_cast<uint32_t>(&g_sendCommitFlagDmaConfig);
+		g_sendPacketDataDmaConfig.field_1c = 0;
+
+		//Configure DMA for the commit flag
+		g_sendCommitFlagDmaConfig.TCR =
+			MDMA_TCR_SWRM | MDMA_TCR_TRGM_LINK | MDMA_TCR_PKE |
+			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
+			MDMA_TCR_DEST_SIZE_32 | MDMA_TCR_SRC_SIZE_16 |
+			MDMA_TCR_DEST_INC | MDMA_TCR_SRC_INC |
+			(1 << 12) |	//move two 16-bit words at a time from the source
+			(0 << 15) |	//move one 32-bit word to the destination
+			(3 << 18);	//move 4 bytes at a time
+		g_sendCommitFlagDmaConfig.BNDTR =
+			(0 << 20) |	//move 1 32-bit words of data
+			(4 << 0);	//move 4 bytes per block
+		g_sendCommitFlagDmaConfig.TBR = MDMA_TBR_DEST_AXI | MDMA_TBR_SRC_TCM;
+		g_sendCommitFlagDmaConfig.SAR = reinterpret_cast<uint32_t>(&g_ethCommitFlag);
+		g_sendCommitFlagDmaConfig.DAR = reinterpret_cast<uint32_t>(&m_txBuf->tx_commit);
+		g_sendCommitFlagDmaConfig.BRUR = 0;
+		g_sendCommitFlagDmaConfig.MAR = 0;
+		g_sendCommitFlagDmaConfig.MDR = 0;
+		g_sendCommitFlagDmaConfig.LAR = 0;	//no subsequent transfer
+		g_sendCommitFlagDmaConfig.field_1c = 0;
+		g_ethCommitFlag = 1;
+
+
+	#endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,32 +158,81 @@ void APBEthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 		return;
 	}
 
+	//Figure out how many 32-bit words to copy
 	uint32_t len = frame->Length();
-	m_txBuf->tx_len = len;
-
-	//Force 32 byte copies for now since the buffer doesn't support anything smaller yet
 	uint32_t wordlen = len / 4;
 	if(len % 4)
 		wordlen ++;
-	volatile uint32_t* dst = reinterpret_cast<volatile uint32_t*>(&m_txBuf->tx_buf[0]);
-	uint8_t* src = frame->RawData();
-	for(uint32_t i=0; i<wordlen; i++)
-	{
-		uint8_t* p = src + i*4;
-		uint32_t tmp =
-			(p[3] << 24) |
-			(p[2] << 16) |
-			(p[1] << 8) |
-			(p[0] << 0);
 
-		dst[i] = tmp;
-	}
+	#ifdef HAVE_MDMA
+	//#if 0
 
-	m_txBuf->tx_commit = 1;
+		//Wait for DMA channel to be idle
+		auto& chan = _MDMA.channels[m_dmaChannel->GetIndex()];
+		while(chan.ISR & MDMA_ISR_CRQA)
+		{}
 
-	//Done, put on free list
-	if(markFree)
-		m_txFreeList.Push(frame);
+		//Mark the previous frame, if any, as free
+		//(TODO do this in an ISR)
+		if(m_dmaTxFrame)
+		{
+			m_txFreeList.Push(m_dmaTxFrame);
+			m_dmaTxFrame = nullptr;
+		}
+		g_ethPacketLen = len;
+
+		//First DMA operation: send tx_len then chain to frame data
+		chan.BNDTR =
+			(0 << 20) |	//move 1 32-bit words of data
+			(4 << 0);	//move 4 bytes per block
+		chan.SAR = reinterpret_cast<uint32_t>(&g_ethPacketLen);
+		chan.DAR = reinterpret_cast<uint32_t>(&m_txBuf->tx_len);
+		chan.LAR = reinterpret_cast<uint32_t>(&g_sendPacketDataDmaConfig);
+
+		//Second DMA operation: Send frame data then chain to commit
+		g_sendPacketDataDmaConfig.BNDTR =
+			((wordlen-1) << 20) |	//move N 32-bit words of data
+			(4 << 0);				//move 4 bytes per block
+		g_sendPacketDataDmaConfig.SAR = reinterpret_cast<uint32_t>(frame->RawData());
+		g_sendPacketDataDmaConfig.DAR = reinterpret_cast<uint32_t>(&m_txBuf->tx_buf[0]);
+
+		//Start the DMA (need to memory barrier so the descriptor updates commit first!)
+		asm("dmb st");
+		chan.CR |= MDMA_CR_EN;
+		chan.CR |= MDMA_CR_SWRQ;
+
+		//Mark this frame as in progress
+		if(markFree)
+			m_dmaTxFrame = frame;
+
+	#else
+
+		//Send length field
+		m_txBuf->tx_len = len;
+
+		//Force 32 byte copies for now since the buffer doesn't support anything smaller yet
+		volatile uint32_t* dst = reinterpret_cast<volatile uint32_t*>(&m_txBuf->tx_buf[0]);
+		uint8_t* src = frame->RawData();
+		for(uint32_t i=0; i<wordlen; i++)
+		{
+			uint8_t* p = src + i*4;
+			uint32_t tmp =
+				(p[3] << 24) |
+				(p[2] << 16) |
+				(p[1] << 8) |
+				(p[0] << 0);
+
+			dst[i] = tmp;
+		}
+
+		//Commit
+		m_txBuf->tx_commit = 1;
+
+		//Done, put on free list
+		if(markFree)
+			m_txFreeList.Push(frame);
+
+	#endif
 }
 
 void APBEthernetInterface::CancelTxFrame(EthernetFrame* frame)

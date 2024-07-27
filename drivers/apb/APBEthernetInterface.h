@@ -47,6 +47,12 @@
 ///@brief Number of frame buffers to allocate for frame transmission
 #define APB_TX_BUFCOUNT 8
 
+//Pull in STM32 headers if we're on one (TODO better detection)
+#if !defined(SIMULATION) && !defined(SOFTCORE_NO_IRQ)
+#include <stm32.h>
+#include <peripheral/MDMA.h>
+#endif
+
 /**
 	@brief Ethernet driver using FPGA based MAC attached over quad SPI
  */
@@ -61,6 +67,8 @@ public:
 	virtual void CancelTxFrame(EthernetFrame* frame) override;
 	virtual EthernetFrame* GetRxFrame() override;
 	virtual void ReleaseRxFrame(EthernetFrame* frame) override;
+
+	void Init();
 
 protected:
 
@@ -81,6 +89,14 @@ protected:
 
 	///@brief TX buffer
 	volatile APB_EthernetTxBuffer_10G* m_txBuf;
+
+	#ifdef HAVE_MDMA
+		///@brief Our DMA channel
+		MDMAChannel* m_dmaChannel;
+	#endif
+
+	//The frame currently being sent by DMA
+	EthernetFrame* m_dmaTxFrame;
 };
 
 #endif
