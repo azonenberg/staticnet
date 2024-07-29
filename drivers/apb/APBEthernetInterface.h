@@ -76,13 +76,13 @@ public:
 protected:
 
 	///@brief RX packet buffers
-	EthernetFrame m_rxBuffers[APB_RX_BUFCOUNT];
+	__attribute__((aligned(16))) EthernetFrame m_rxBuffers[APB_RX_BUFCOUNT];
 
 	///@brief FIFO of RX buffers available for use
 	FIFO<EthernetFrame*, APB_RX_BUFCOUNT> m_rxFreeList;
 
 	///@brief TX packet buffers
-	EthernetFrame m_txBuffers[APB_TX_BUFCOUNT];
+	__attribute__((aligned(16))) EthernetFrame m_txBuffers[APB_TX_BUFCOUNT];
 
 	///@brief FIFO of TX buffers available for use
 	FIFO<EthernetFrame*, APB_TX_BUFCOUNT> m_txFreeList;
@@ -96,10 +96,13 @@ protected:
 	#ifdef HAVE_MDMA
 		///@brief Our DMA channel
 		MDMAChannel* m_dmaChannel;
-	#endif
 
-	//The frame currently being sent by DMA
-	EthernetFrame* m_dmaTxFrame;
+		///@brief Commit flag (always 1 but has to live in TCM)
+		uint32_t m_commitFlag;
+
+		//The frame currently being sent by DMA
+		EthernetFrame* m_dmaTxFrame;
+	#endif
 };
 
 #endif

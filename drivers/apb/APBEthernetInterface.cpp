@@ -42,7 +42,6 @@ extern Logger g_log;
 	__attribute__((aligned(16))) MDMATransferConfig g_sendCommitFlagDmaConfig;
 	__attribute__((aligned(16))) MDMATransferConfig g_sendPacketDataDmaConfig;
 
-	__attribute__((section(".tcmbss"))) uint32_t g_ethCommitFlag;
 	__attribute__((section(".tcmbss"))) uint32_t g_ethPacketLen;
 #endif
 
@@ -54,7 +53,10 @@ APBEthernetInterface::APBEthernetInterface(
 	volatile APB_EthernetTxBuffer_10G* txbuf)
 	: m_rxBuf(rxbuf)
 	, m_txBuf(txbuf)
+#ifdef HAVE_MDMA
+	, m_commitFlag(1)
 	, m_dmaTxFrame(nullptr)
+#endif
 {
 	for(int i=0; i<APB_TX_BUFCOUNT; i++)
 		m_txFreeList.Push(&m_txBuffers[i]);
@@ -86,7 +88,6 @@ void APBEthernetInterface::Init()
 		//Do high level configuration of the DMA channel (same for every packet)
 		auto& tc = m_dmaChannel->GetTransferConfig();
 		tc.TCR =
-			MDMA_TCR_PKE |
 			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
 			MDMA_TCR_DEST_SIZE_32 | MDMA_TCR_SRC_SIZE_16 |
 			MDMA_TCR_DEST_INC | MDMA_TCR_SRC_INC |
@@ -95,13 +96,13 @@ void APBEthernetInterface::Init()
 			(3 << 18);	//move 4 bytes at a time
 		tc.EnableWriteBuffer();
 		tc.SetSoftwareRequestMode();
+		tc.EnablePackMode();
 		tc.SetTriggerMode(MDMATransferConfig::MODE_LINKED_LIST);
 		tc.SetBusConfig(MDMATransferConfig::SRC_TCM, MDMATransferConfig::DST_AXI);
 
 		//Configure DMA for the packet data
 		g_sendPacketDataDmaConfig.ConfigureDefaults();
 		g_sendPacketDataDmaConfig.TCR =
-			MDMA_TCR_PKE |
 			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
 			MDMA_TCR_DEST_SIZE_32 | MDMA_TCR_SRC_SIZE_16 |
 			MDMA_TCR_DEST_INC | MDMA_TCR_SRC_INC |
@@ -111,6 +112,7 @@ void APBEthernetInterface::Init()
 		//BNDTR is updated at packet send time
 		g_sendPacketDataDmaConfig.EnableWriteBuffer();
 		g_sendPacketDataDmaConfig.SetSoftwareRequestMode();
+		g_sendPacketDataDmaConfig.EnablePackMode();
 		g_sendPacketDataDmaConfig.SetTriggerMode(MDMATransferConfig::MODE_LINKED_LIST);
 		g_sendPacketDataDmaConfig.SetBusConfig(MDMATransferConfig::SRC_TCM, MDMATransferConfig::DST_AXI);
 		//SAR and DAR are updated at packet send time
@@ -118,7 +120,6 @@ void APBEthernetInterface::Init()
 
 		//Configure DMA for the commit flag
 		g_sendCommitFlagDmaConfig.TCR =
-			MDMA_TCR_PKE |
 			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
 			MDMA_TCR_DEST_SIZE_32 | MDMA_TCR_SRC_SIZE_16 |
 			MDMA_TCR_DEST_INC | MDMA_TCR_SRC_INC |
@@ -127,14 +128,14 @@ void APBEthernetInterface::Init()
 			(3 << 18);	//move 4 bytes at a time
 		g_sendCommitFlagDmaConfig.EnableWriteBuffer();
 		g_sendCommitFlagDmaConfig.SetSoftwareRequestMode();
+		g_sendCommitFlagDmaConfig.EnablePackMode();
 		g_sendCommitFlagDmaConfig.SetTriggerMode(MDMATransferConfig::MODE_LINKED_LIST);
 		g_sendCommitFlagDmaConfig.BNDTR =
 			(0 << 20) |	//move 1 32-bit words of data
 			(4 << 0);	//move 4 bytes per block
 		g_sendCommitFlagDmaConfig.SetBusConfig(MDMATransferConfig::SRC_TCM, MDMATransferConfig::DST_AXI);
-		g_sendCommitFlagDmaConfig.SetSourcePointer(&g_ethCommitFlag);
+		g_sendCommitFlagDmaConfig.SetSourcePointer(&m_commitFlag);
 		g_sendCommitFlagDmaConfig.SetDestPointer(&m_txBuf->tx_commit);
-		g_ethCommitFlag = 1;
 
 	#endif
 }
