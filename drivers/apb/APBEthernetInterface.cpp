@@ -37,12 +37,14 @@
 #include <embedded-utils/Logger.h>
 extern Logger g_log;
 
-//New MDMA channel configurations for linked list format
-__attribute__((aligned(16))) MDMATransferConfig g_sendCommitFlagDmaConfig;
-__attribute__((aligned(16))) MDMATransferConfig g_sendPacketDataDmaConfig;
+#ifdef HAVE_MDMA
+	//New MDMA channel configurations for linked list format
+	__attribute__((aligned(16))) MDMATransferConfig g_sendCommitFlagDmaConfig;
+	__attribute__((aligned(16))) MDMATransferConfig g_sendPacketDataDmaConfig;
 
-__attribute__((section(".tcmbss"))) uint32_t g_ethCommitFlag;
-__attribute__((section(".tcmbss"))) uint32_t g_ethPacketLen;
+	__attribute__((section(".tcmbss"))) uint32_t g_ethCommitFlag;
+	__attribute__((section(".tcmbss"))) uint32_t g_ethPacketLen;
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
@@ -83,20 +85,23 @@ void APBEthernetInterface::Init()
 
 		//Do high level configuration of the DMA channel (same for every packet)
 		auto& tc = m_dmaChannel->GetTransferConfig();
-		tc.TCR = MDMA_TCR_BWM |
-			MDMA_TCR_SWRM | MDMA_TCR_TRGM_LINK | MDMA_TCR_PKE |
+		tc.TCR =
+			MDMA_TCR_PKE |
 			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
 			MDMA_TCR_DEST_SIZE_32 | MDMA_TCR_SRC_SIZE_16 |
 			MDMA_TCR_DEST_INC | MDMA_TCR_SRC_INC |
 			(1 << 12) |	//move two 16-bit words at a time from the source
 			(0 << 15) |	//move one 32-bit word to the destination
 			(3 << 18);	//move 4 bytes at a time
+		tc.EnableWriteBuffer();
+		tc.SetSoftwareRequestMode();
+		tc.SetTriggerMode(MDMATransferConfig::MODE_LINKED_LIST);
 		tc.SetBusConfig(MDMATransferConfig::SRC_TCM, MDMATransferConfig::DST_AXI);
 
 		//Configure DMA for the packet data
 		g_sendPacketDataDmaConfig.ConfigureDefaults();
-		g_sendPacketDataDmaConfig.TCR = MDMA_TCR_BWM |
-			MDMA_TCR_SWRM | MDMA_TCR_TRGM_LINK | MDMA_TCR_PKE |
+		g_sendPacketDataDmaConfig.TCR =
+			MDMA_TCR_PKE |
 			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
 			MDMA_TCR_DEST_SIZE_32 | MDMA_TCR_SRC_SIZE_16 |
 			MDMA_TCR_DEST_INC | MDMA_TCR_SRC_INC |
@@ -104,19 +109,25 @@ void APBEthernetInterface::Init()
 			(0 << 15) |	//move one 32-bit word to the destination
 			(3 << 18);	//move 4 bytes at a time
 		//BNDTR is updated at packet send time
+		g_sendPacketDataDmaConfig.EnableWriteBuffer();
+		g_sendPacketDataDmaConfig.SetSoftwareRequestMode();
+		g_sendPacketDataDmaConfig.SetTriggerMode(MDMATransferConfig::MODE_LINKED_LIST);
 		g_sendPacketDataDmaConfig.SetBusConfig(MDMATransferConfig::SRC_TCM, MDMATransferConfig::DST_AXI);
 		//SAR and DAR are updated at packet send time
 		g_sendPacketDataDmaConfig.AppendTransfer(&g_sendCommitFlagDmaConfig);
 
 		//Configure DMA for the commit flag
-		g_sendCommitFlagDmaConfig.TCR = MDMA_TCR_BWM |
-			MDMA_TCR_SWRM | MDMA_TCR_TRGM_LINK | MDMA_TCR_PKE |
+		g_sendCommitFlagDmaConfig.TCR =
+			MDMA_TCR_PKE |
 			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
 			MDMA_TCR_DEST_SIZE_32 | MDMA_TCR_SRC_SIZE_16 |
 			MDMA_TCR_DEST_INC | MDMA_TCR_SRC_INC |
 			(1 << 12) |	//move two 16-bit words at a time from the source
 			(0 << 15) |	//move one 32-bit word to the destination
 			(3 << 18);	//move 4 bytes at a time
+		g_sendCommitFlagDmaConfig.EnableWriteBuffer();
+		g_sendCommitFlagDmaConfig.SetSoftwareRequestMode();
+		g_sendCommitFlagDmaConfig.SetTriggerMode(MDMATransferConfig::MODE_LINKED_LIST);
 		g_sendCommitFlagDmaConfig.BNDTR =
 			(0 << 20) |	//move 1 32-bit words of data
 			(4 << 0);	//move 4 bytes per block
