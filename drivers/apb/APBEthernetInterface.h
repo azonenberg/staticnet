@@ -54,7 +54,10 @@
 #endif
 
 /**
-	@brief Ethernet driver using FPGA based MAC attached over quad SPI
+	@brief Ethernet driver using FPGA based MAC attached over APB
+
+	NOTE: the current implementation uses some global state and only one instance can be used at a time as a result.
+	(it's fine to have multiple objects, but only one can be sending at once)
  */
 class APBEthernetInterface : public EthernetInterface
 {

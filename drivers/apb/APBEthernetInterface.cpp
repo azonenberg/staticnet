@@ -38,8 +38,8 @@
 extern Logger g_log;
 
 //New MDMA channel configurations for linked list format
-__attribute__((aligned(16))) mdma_linkedlist_t g_sendCommitFlagDmaConfig;
-__attribute__((aligned(16))) mdma_linkedlist_t g_sendPacketDataDmaConfig;
+__attribute__((aligned(16))) MDMATransferConfig g_sendCommitFlagDmaConfig;
+__attribute__((aligned(16))) MDMATransferConfig g_sendPacketDataDmaConfig;
 
 __attribute__((section(".tcmbss"))) uint32_t g_ethCommitFlag;
 __attribute__((section(".tcmbss"))) uint32_t g_ethPacketLen;
@@ -82,8 +82,8 @@ void APBEthernetInterface::Init()
 		g_log("APBEthernetInterface is using MDMA channel %d\n", m_dmaChannel->GetIndex());
 
 		//Do high level configuration of the DMA channel (same for every packet)
-		auto& chan = _MDMA.channels[m_dmaChannel->GetIndex()];
-		chan.TCR = MDMA_TCR_BWM |
+		auto& tc = m_dmaChannel->GetTransferConfig();
+		tc.TCR = MDMA_TCR_BWM |
 			MDMA_TCR_SWRM | MDMA_TCR_TRGM_LINK | MDMA_TCR_PKE |
 			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
 			MDMA_TCR_DEST_SIZE_32 | MDMA_TCR_SRC_SIZE_16 |
@@ -91,9 +91,10 @@ void APBEthernetInterface::Init()
 			(1 << 12) |	//move two 16-bit words at a time from the source
 			(0 << 15) |	//move one 32-bit word to the destination
 			(3 << 18);	//move 4 bytes at a time
-		chan.TBR = MDMA_TBR_DEST_AXI | MDMA_TBR_SRC_TCM;
+		tc.SetBusConfig(MDMATransferConfig::SRC_TCM, MDMATransferConfig::DST_AXI);
 
 		//Configure DMA for the packet data
+		g_sendPacketDataDmaConfig.ConfigureDefaults();
 		g_sendPacketDataDmaConfig.TCR = MDMA_TCR_BWM |
 			MDMA_TCR_SWRM | MDMA_TCR_TRGM_LINK | MDMA_TCR_PKE |
 			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
@@ -103,13 +104,9 @@ void APBEthernetInterface::Init()
 			(0 << 15) |	//move one 32-bit word to the destination
 			(3 << 18);	//move 4 bytes at a time
 		//BNDTR is updated at packet send time
-		g_sendPacketDataDmaConfig.TBR = MDMA_TBR_DEST_AXI | MDMA_TBR_SRC_TCM;
+		g_sendPacketDataDmaConfig.SetBusConfig(MDMATransferConfig::SRC_TCM, MDMATransferConfig::DST_AXI);
 		//SAR and DAR are updated at packet send time
-		g_sendPacketDataDmaConfig.BRUR = 0;
-		g_sendPacketDataDmaConfig.MAR = 0;
-		g_sendPacketDataDmaConfig.MDR = 0;
-		g_sendPacketDataDmaConfig.LAR = reinterpret_cast<uint32_t>(&g_sendCommitFlagDmaConfig);
-		g_sendPacketDataDmaConfig.field_1c = 0;
+		g_sendPacketDataDmaConfig.AppendTransfer(&g_sendCommitFlagDmaConfig);
 
 		//Configure DMA for the commit flag
 		g_sendCommitFlagDmaConfig.TCR = MDMA_TCR_BWM |
@@ -123,14 +120,9 @@ void APBEthernetInterface::Init()
 		g_sendCommitFlagDmaConfig.BNDTR =
 			(0 << 20) |	//move 1 32-bit words of data
 			(4 << 0);	//move 4 bytes per block
-		g_sendCommitFlagDmaConfig.TBR = MDMA_TBR_DEST_AXI | MDMA_TBR_SRC_TCM;
-		g_sendCommitFlagDmaConfig.SAR = reinterpret_cast<uint32_t>(&g_ethCommitFlag);
-		g_sendCommitFlagDmaConfig.DAR = reinterpret_cast<uint32_t>(&m_txBuf->tx_commit);
-		g_sendCommitFlagDmaConfig.BRUR = 0;
-		g_sendCommitFlagDmaConfig.MAR = 0;
-		g_sendCommitFlagDmaConfig.MDR = 0;
-		g_sendCommitFlagDmaConfig.LAR = 0;	//no subsequent transfer
-		g_sendCommitFlagDmaConfig.field_1c = 0;
+		g_sendCommitFlagDmaConfig.SetBusConfig(MDMATransferConfig::SRC_TCM, MDMATransferConfig::DST_AXI);
+		g_sendCommitFlagDmaConfig.SetSourcePointer(&g_ethCommitFlag);
+		g_sendCommitFlagDmaConfig.SetDestPointer(&m_txBuf->tx_commit);
 		g_ethCommitFlag = 1;
 
 	#endif
@@ -181,19 +173,20 @@ void APBEthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 		g_ethPacketLen = len;
 
 		//First DMA operation: send tx_len then chain to frame data
-		chan.BNDTR =
+		auto& tc = m_dmaChannel->GetTransferConfig();
+		tc.BNDTR =
 			(0 << 20) |	//move 1 32-bit words of data
 			(4 << 0);	//move 4 bytes per block
-		chan.SAR = reinterpret_cast<uint32_t>(&g_ethPacketLen);
-		chan.DAR = reinterpret_cast<uint32_t>(&m_txBuf->tx_len);
-		chan.LAR = reinterpret_cast<uint32_t>(&g_sendPacketDataDmaConfig);
+		tc.SetSourcePointer(&g_ethPacketLen);
+		tc.SetDestPointer(&m_txBuf->tx_len);
+		tc.AppendTransfer(&g_sendPacketDataDmaConfig);
 
 		//Second DMA operation: Send frame data then chain to commit
 		g_sendPacketDataDmaConfig.BNDTR =
 			((wordlen-1) << 20) |	//move N 32-bit words of data
 			(4 << 0);				//move 4 bytes per block
-		g_sendPacketDataDmaConfig.SAR = reinterpret_cast<uint32_t>(frame->RawData());
-		g_sendPacketDataDmaConfig.DAR = reinterpret_cast<uint32_t>(&m_txBuf->tx_buf[0]);
+		g_sendPacketDataDmaConfig.SetSourcePointer(frame->RawData());
+		g_sendPacketDataDmaConfig.SetDestPointer(&m_txBuf->tx_buf[0]);
 
 		//Start the DMA (need to memory barrier so the descriptor updates commit first!)
 		asm("dmb st");
