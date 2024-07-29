@@ -75,7 +75,7 @@ void APBEthernetInterface::Init()
 {
 	#ifdef HAVE_MDMA
 
-		//Requeast a DMA channel. If we can't get one, fail
+		//Request a DMA channel. If we can't get one, fail
 		m_dmaChannel = g_mdma.AllocateChannel();
 		if(!m_dmaChannel)
 		{
@@ -88,54 +88,35 @@ void APBEthernetInterface::Init()
 		//Do high level configuration of the DMA channel (same for every packet)
 		auto& tc = m_dmaChannel->GetTransferConfig();
 		tc.TCR =
-			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
-			MDMA_TCR_DEST_SIZE_32 | MDMA_TCR_SRC_SIZE_16 |
-			MDMA_TCR_DEST_INC | MDMA_TCR_SRC_INC |
-			(1 << 12) |	//move two 16-bit words at a time from the source
-			(0 << 15) |	//move one 32-bit word to the destination
-			(3 << 18);	//move 4 bytes at a time
+			MDMA_TCR_DEST_INC_32 | MDMA_TCR_DEST_SIZE_32 |
+			(0 << 15);	//move one 32-bit word to the destination
 		tc.EnableWriteBuffer();
 		tc.SetSoftwareRequestMode();
 		tc.EnablePackMode();
 		tc.SetTriggerMode(MDMATransferConfig::MODE_LINKED_LIST);
+		tc.SetSourcePointerMode(
+			MDMATransferConfig::SOURCE_INCREMENT,
+			MDMATransferConfig::SOURCE_INC_16,
+			MDMATransferConfig::SOURCE_SIZE_16);
+		tc.SetDestIncrementMode(MDMATransferConfig::DEST_INCREMENT);
+		tc.SetBufferTransactionLength(4);
+		tc.SetSourceBurstLength(MDMATransferConfig::SOURCE_BURST_2);
 		tc.SetBusConfig(MDMATransferConfig::SRC_TCM, MDMATransferConfig::DST_AXI);
 
-		//Configure DMA for the packet data
-		g_sendPacketDataDmaConfig.ConfigureDefaults();
-		g_sendPacketDataDmaConfig.TCR =
-			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
-			MDMA_TCR_DEST_SIZE_32 | MDMA_TCR_SRC_SIZE_16 |
-			MDMA_TCR_DEST_INC | MDMA_TCR_SRC_INC |
-			(1 << 12) |	//move two 16-bit words at a time from the source
-			(0 << 15) |	//move one 32-bit word to the destination
-			(3 << 18);	//move 4 bytes at a time
+		//Configure DMA for the packet data (copy config from top level channel)
+		g_sendPacketDataDmaConfig = tc;
 		//BNDTR is updated at packet send time
-		g_sendPacketDataDmaConfig.EnableWriteBuffer();
-		g_sendPacketDataDmaConfig.SetSoftwareRequestMode();
-		g_sendPacketDataDmaConfig.EnablePackMode();
-		g_sendPacketDataDmaConfig.SetTriggerMode(MDMATransferConfig::MODE_LINKED_LIST);
-		g_sendPacketDataDmaConfig.SetBusConfig(MDMATransferConfig::SRC_TCM, MDMATransferConfig::DST_AXI);
 		//SAR and DAR are updated at packet send time
 		g_sendPacketDataDmaConfig.AppendTransfer(&g_sendCommitFlagDmaConfig);
 
 		//Configure DMA for the commit flag
-		g_sendCommitFlagDmaConfig.TCR =
-			MDMA_TCR_DEST_INC_32 | MDMA_TCR_SRC_INC_16 |
-			MDMA_TCR_DEST_SIZE_32 | MDMA_TCR_SRC_SIZE_16 |
-			MDMA_TCR_DEST_INC | MDMA_TCR_SRC_INC |
-			(1 << 12) |	//move two 16-bit words at a time from the source
-			(0 << 15) |	//move one 32-bit word to the destination
-			(3 << 18);	//move 4 bytes at a time
-		g_sendCommitFlagDmaConfig.EnableWriteBuffer();
-		g_sendCommitFlagDmaConfig.SetSoftwareRequestMode();
-		g_sendCommitFlagDmaConfig.EnablePackMode();
-		g_sendCommitFlagDmaConfig.SetTriggerMode(MDMATransferConfig::MODE_LINKED_LIST);
+		g_sendCommitFlagDmaConfig = tc;
 		g_sendCommitFlagDmaConfig.BNDTR =
 			(0 << 20) |	//move 1 32-bit words of data
 			(4 << 0);	//move 4 bytes per block
-		g_sendCommitFlagDmaConfig.SetBusConfig(MDMATransferConfig::SRC_TCM, MDMATransferConfig::DST_AXI);
 		g_sendCommitFlagDmaConfig.SetSourcePointer(&m_commitFlag);
 		g_sendCommitFlagDmaConfig.SetDestPointer(&m_txBuf->tx_commit);
+		g_sendCommitFlagDmaConfig.AppendTransfer(nullptr);
 
 	#endif
 }
