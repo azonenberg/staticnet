@@ -66,11 +66,6 @@ APBEthernetInterface::APBEthernetInterface(
 	//TODO: hardware resets of peripherals?
 }
 
-APBEthernetInterface::~APBEthernetInterface()
-{
-	//nothing here
-}
-
 void APBEthernetInterface::Init()
 {
 	#ifdef HAVE_MDMA

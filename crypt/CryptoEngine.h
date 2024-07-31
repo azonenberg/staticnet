@@ -56,7 +56,6 @@ class CryptoEngine
 {
 public:
 	CryptoEngine();
-	virtual ~CryptoEngine();
 
 	///@brief Generate cryptographic randomness
 	virtual void GenerateRandom(uint8_t* buf, size_t len) =0;

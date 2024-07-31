@@ -50,9 +50,6 @@ public:
 	{
 	}
 
-	virtual ~TCPServer()
-	{}
-
 	virtual void OnConnectionAccepted(TCPTableEntry* socket) =0;
 	virtual void OnConnectionClosed(TCPTableEntry* socket) =0;
 	virtual bool OnRxData(TCPTableEntry* socket, uint8_t* payload, uint16_t payloadLen) =0;

@@ -63,7 +63,6 @@ class APBEthernetInterface : public EthernetInterface
 {
 public:
 	APBEthernetInterface(volatile APB_EthernetRxBuffer* rxbuf, volatile APB_EthernetTxBuffer_10G* txbuf);
-	virtual ~APBEthernetInterface();
 
 	virtual EthernetFrame* GetTxFrame() override;
 	virtual void SendTxFrame(EthernetFrame* frame, bool markFree=true) override;

@@ -46,7 +46,6 @@ class STM32CryptoEngine : public CryptoEngine
 {
 public:
 	STM32CryptoEngine();
-	virtual ~STM32CryptoEngine();
 
 	virtual void GenerateRandom(uint8_t* buf, size_t len);
 	virtual void Clear();

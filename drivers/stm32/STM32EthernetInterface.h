@@ -46,7 +46,6 @@ class STM32EthernetInterface : public EthernetInterface
 {
 public:
 	STM32EthernetInterface();
-	virtual ~STM32EthernetInterface();
 
 	virtual EthernetFrame* GetTxFrame() override;
 	virtual void SendTxFrame(EthernetFrame* frame, bool markFree=true) override;

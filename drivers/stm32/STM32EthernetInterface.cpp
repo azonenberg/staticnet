@@ -97,11 +97,6 @@ STM32EthernetInterface::STM32EthernetInterface()
 	EDMA.DMAOMR |= 0x2002;
 }
 
-STM32EthernetInterface::~STM32EthernetInterface()
-{
-	//nothing here
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Transmit path
 
