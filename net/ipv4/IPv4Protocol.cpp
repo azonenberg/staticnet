@@ -89,6 +89,9 @@ uint16_t IPv4Protocol::InternetChecksum(uint8_t* data, uint16_t len, uint16_t in
 /**
 	@brief Calculates the TCP/UDP pseudoheader checksum for a packet
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 uint16_t IPv4Protocol::PseudoHeaderChecksum(IPv4Packet* packet, uint16_t length)
 {
 	uint8_t pseudoheader[]
@@ -295,6 +298,9 @@ void IPv4Protocol::OnAgingTick10x()
 
 	Returns nullptr if we don't have an ARP entry for the destination yet and it's not a broadcast
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 IPv4Packet* IPv4Protocol::GetTxPacket(IPv4Address dest, ipproto_t proto)
 {
 	auto arp = m_eth.GetARP();
@@ -383,6 +389,9 @@ IPv4Packet* IPv4Protocol::GetTxPacket(IPv4Address dest, ipproto_t proto)
 
 	The packet MUST have been allocated by GetTxPacket().
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void IPv4Protocol::SendTxPacket(IPv4Packet* packet, size_t upperLayerLength, bool markFree)
 {
 	//Get the full frame given the packet

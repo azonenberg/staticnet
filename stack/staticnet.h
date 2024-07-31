@@ -38,6 +38,12 @@
 //provided by your project, must be in the search path
 #include <staticnet-config.h>
 
+//Pull in STM32 headers if we're on one (TODO better detection)
+#if !defined(SIMULATION) && !defined(SOFTCORE_NO_IRQ)
+#include <stm32.h>
+#include <peripheral/MDMA.h>
+#endif
+
 #include <stdint.h>
 #include <memory.h>
 

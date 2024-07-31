@@ -44,6 +44,9 @@ UDPProtocol::UDPProtocol(IPv4Protocol* ipv4)
 /**
 	@brief Handles an incoming UDP packet
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void UDPProtocol::OnRxPacket(
 	UDPPacket* packet,
 	uint16_t ipPayloadLength,
@@ -75,6 +78,9 @@ void UDPProtocol::OnRxPacket(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Outbound traffic
 
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 UDPPacket* UDPProtocol::GetTxPacket(IPv4Address dstip)
 {
 	//Allocate the frame and fail if we couldn't allocate one
@@ -95,6 +101,9 @@ void UDPProtocol::CancelTxPacket(UDPPacket* packet)
 /**
 	@brief Does final prep and sends a UDP packet
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void UDPProtocol::SendTxPacket(UDPPacket* packet, uint16_t sport, uint16_t dport, uint16_t payloadLen)
 {
 	auto length = payloadLen + 8;

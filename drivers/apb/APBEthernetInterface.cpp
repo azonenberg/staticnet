@@ -119,6 +119,9 @@ void APBEthernetInterface::Init()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Transmit path
 
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 EthernetFrame* APBEthernetInterface::GetTxFrame()
 {
 	if(m_txFreeList.IsEmpty())
@@ -128,6 +131,9 @@ EthernetFrame* APBEthernetInterface::GetTxFrame()
 		return m_txFreeList.Pop();
 }
 
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void APBEthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 {
 	if(frame == nullptr)
@@ -215,6 +221,9 @@ void APBEthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 	#endif
 }
 
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void APBEthernetInterface::CancelTxFrame(EthernetFrame* frame)
 {
 	//Return it to the free list
@@ -224,6 +233,9 @@ void APBEthernetInterface::CancelTxFrame(EthernetFrame* frame)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Receive path
 
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 EthernetFrame* APBEthernetInterface::GetRxFrame()
 {
 	//Read and sanity check length
@@ -264,6 +276,9 @@ EthernetFrame* APBEthernetInterface::GetRxFrame()
 	return frame;
 }
 
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void APBEthernetInterface::ReleaseRxFrame(EthernetFrame* frame)
 {
 	m_rxFreeList.Push(frame);

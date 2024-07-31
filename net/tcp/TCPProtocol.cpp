@@ -41,6 +41,9 @@ TCPProtocol::TCPProtocol(IPv4Protocol* ipv4)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Initialization
 
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 TCPSegment* TCPProtocol::GetTxSegment(TCPTableEntry* state)
 {
 	//Make sure we have space in the outbox for it
@@ -128,6 +131,9 @@ void TCPProtocol::OnAgingTick10x()
 /**
 	@brief Handles an incoming TCP packet
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void TCPProtocol::OnRxPacket(
 	TCPSegment* segment,
 	uint16_t ipPayloadLength,
@@ -257,6 +263,9 @@ void TCPProtocol::OnRxRST(TCPSegment* segment, IPv4Address sourceAddress)
 /**
 	@brief Handles an incoming frame during a connection
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16_t payloadLen)
 {
 	//Look up the socket handle for this segment. Drop silently if not a valid segment
@@ -372,6 +381,9 @@ void TCPProtocol::OnRxACK(TCPSegment* segment, IPv4Address sourceAddress, uint16
 /**
 	@brief Does final prep and sends a TCP segment
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void TCPProtocol::SendSegment(TCPTableEntry* state, TCPSegment* segment, IPv4Packet* packet, uint16_t length)
 {
 	//Calculate the pseudoheader checksum
@@ -410,6 +422,9 @@ void TCPProtocol::SendSegment(TCPTableEntry* state, TCPSegment* segment, IPv4Pac
 /**
 	@brief Create a reply segment for a given socket state
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 IPv4Packet* TCPProtocol::CreateReply(TCPTableEntry* state)
 {
 	//Get ready to send a reply, if no free buffers give up
@@ -458,6 +473,9 @@ void TCPProtocol::CloseSocket(TCPTableEntry* state)
 
 	32-bit FNV-1 for now. Simple and good mixing, but uses a bunch of multiplies so might be slow?
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 uint16_t TCPProtocol::Hash(IPv4Address ip, uint16_t localPort, uint16_t remotePort)
 {
 	size_t hash = FNV_INITIAL;
@@ -474,6 +492,9 @@ uint16_t TCPProtocol::Hash(IPv4Address ip, uint16_t localPort, uint16_t remotePo
 /**
 	@brief Looks up the socket state for the given connection
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 TCPTableEntry* TCPProtocol::GetSocketState(IPv4Address ip, uint16_t localPort, uint16_t remotePort)
 {
 	auto hash = Hash(ip, localPort, remotePort);
