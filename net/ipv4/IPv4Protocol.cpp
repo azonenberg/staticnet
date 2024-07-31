@@ -32,6 +32,10 @@
 #include <staticnet-config.h>
 #include <staticnet/stack/staticnet.h>
 
+#if !defined(SIMULATION) && !defined(SOFTCORE_NO_IRQ)
+#include <stm32.h>
+#endif
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
 
@@ -56,6 +60,9 @@ IPv4Protocol::IPv4Protocol(EthernetProtocol& eth, IPv4Config& config, ARPCache& 
 /**
 	@brief Computes the Internet Checksum on a block of data in network byte order.
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 uint16_t IPv4Protocol::InternetChecksum(uint8_t* data, uint16_t len, uint16_t initial)
 {
 	//Sum in 16-bit blocks until we run out
