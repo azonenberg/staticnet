@@ -40,14 +40,20 @@
 /**
 	@brief A UDP packet sent over IPv4
  */
-class __attribute__((packed)) UDPPacket
+class UDPPacket
 {
 public:
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Byte ordering correction
 
-	void ByteSwap();
+	void ByteSwap()
+	{
+		m_sourcePort = __builtin_bswap16(m_sourcePort);
+		m_destPort = __builtin_bswap16(m_destPort);
+		m_len = __builtin_bswap16(m_len);
+		//don't swap checksum, we do that in network byte order
+	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Accessors for actual packet data

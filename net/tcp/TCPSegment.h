@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -55,7 +55,17 @@ public:
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Byte ordering correction
 
-	void ByteSwap();
+	void ByteSwap()
+	{
+		m_sourcePort = __builtin_bswap16(m_sourcePort);
+		m_destPort = __builtin_bswap16(m_destPort);
+		m_sequence = __builtin_bswap32(m_sequence);
+		m_ack = __builtin_bswap32(m_ack);
+		m_offsetAndFlags = __builtin_bswap16(m_offsetAndFlags);
+		m_windowSize = __builtin_bswap16(m_windowSize);
+		//don't swap checksum, we do that in network byte order
+		//ignore urgent pointer
+	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Accessors for actual packet data

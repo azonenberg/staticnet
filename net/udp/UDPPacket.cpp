@@ -29,14 +29,3 @@
 
 #include <staticnet-config.h>
 #include <staticnet/stack/staticnet.h>
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Byte swapping
-
-void UDPPacket::ByteSwap()
-{
-	m_sourcePort = __builtin_bswap16(m_sourcePort);
-	m_destPort = __builtin_bswap16(m_destPort);
-	m_len = __builtin_bswap16(m_len);
-	//don't swap checksum, we do that in network byte order
-}
