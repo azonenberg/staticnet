@@ -82,9 +82,6 @@ void APBEthernetInterface::Init()
 
 		//Do high level configuration of the DMA channel (same for every packet)
 		auto& tc = m_dmaChannel->GetTransferConfig();
-		tc.TCR =
-			MDMA_TCR_DEST_INC_32 | MDMA_TCR_DEST_SIZE_32 |
-			(0 << 15);	//move one 32-bit word to the destination
 		tc.EnableWriteBuffer();
 		tc.SetSoftwareRequestMode();
 		tc.EnablePackMode();
@@ -93,8 +90,12 @@ void APBEthernetInterface::Init()
 			MDMATransferConfig::SOURCE_INCREMENT,
 			MDMATransferConfig::SOURCE_INC_16,
 			MDMATransferConfig::SOURCE_SIZE_16);
-		tc.SetDestIncrementMode(MDMATransferConfig::DEST_INCREMENT);
+		tc.SetDestPointerMode(
+			MDMATransferConfig::DEST_INCREMENT,
+			MDMATransferConfig::DEST_INC_32,
+			MDMATransferConfig::DEST_SIZE_32);
 		tc.SetBufferTransactionLength(4);
+		tc.SetTransferBytes(4);
 		tc.SetSourceBurstLength(MDMATransferConfig::SOURCE_BURST_2);
 		tc.SetBusConfig(MDMATransferConfig::SRC_TCM, MDMATransferConfig::DST_AXI);
 
@@ -106,9 +107,7 @@ void APBEthernetInterface::Init()
 
 		//Configure DMA for the commit flag
 		g_sendCommitFlagDmaConfig = tc;
-		g_sendCommitFlagDmaConfig.BNDTR =
-			(0 << 20) |	//move 1 32-bit words of data
-			(4 << 0);	//move 4 bytes per block
+		g_sendCommitFlagDmaConfig.SetTransferBlockConfig(4, 1);
 		g_sendCommitFlagDmaConfig.SetSourcePointer(&m_commitFlag);
 		g_sendCommitFlagDmaConfig.SetDestPointer(&m_txBuf->tx_commit);
 		g_sendCommitFlagDmaConfig.AppendTransfer(nullptr);
@@ -152,10 +151,8 @@ void APBEthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 	#ifdef HAVE_MDMA
 	//#if 0
 
-		//Wait for DMA channel to be idle
-		auto& chan = _MDMA.channels[m_dmaChannel->GetIndex()];
-		while(chan.ISR & MDMA_ISR_CRQA)
-		{}
+		//Make sure the previous DMA has completed before we try to reconfigure the channel
+		m_dmaChannel->WaitIdle();
 
 		//Mark the previous frame, if any, as free
 		//(TODO do this in an ISR)
@@ -168,24 +165,18 @@ void APBEthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 
 		//First DMA operation: send tx_len then chain to frame data
 		auto& tc = m_dmaChannel->GetTransferConfig();
-		tc.BNDTR =
-			(0 << 20) |	//move 1 32-bit words of data
-			(4 << 0);	//move 4 bytes per block
+		tc.SetTransferBlockConfig(4, 1);
 		tc.SetSourcePointer(&g_ethPacketLen);
 		tc.SetDestPointer(&m_txBuf->tx_len);
 		tc.AppendTransfer(&g_sendPacketDataDmaConfig);
 
 		//Second DMA operation: Send frame data then chain to commit
-		g_sendPacketDataDmaConfig.BNDTR =
-			((wordlen-1) << 20) |	//move N 32-bit words of data
-			(4 << 0);				//move 4 bytes per block
+		g_sendPacketDataDmaConfig.SetTransferBlockConfig(4, wordlen);
 		g_sendPacketDataDmaConfig.SetSourcePointer(frame->RawData());
 		g_sendPacketDataDmaConfig.SetDestPointer(&m_txBuf->tx_buf[0]);
 
-		//Start the DMA (need to memory barrier so the descriptor updates commit first!)
-		asm("dmb st");
-		chan.CR |= MDMA_CR_EN;
-		chan.CR |= MDMA_CR_SWRQ;
+		//Chain is constructed, start the DMA
+		m_dmaChannel->Start();
 
 		//Mark this frame as in progress
 		if(markFree)
