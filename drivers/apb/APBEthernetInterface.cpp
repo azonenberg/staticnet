@@ -148,8 +148,35 @@ void APBEthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 	if(len % 4)
 		wordlen ++;
 
-	#ifdef HAVE_MDMA
-	//#if 0
+	#ifdef QSPI_CACHE_WORKAROUND
+
+		//Send length field
+		m_txBuf->tx_len = len;
+
+		//Force 32 bit copies to the tx_word register to avoid weirdness
+		uint8_t* src = frame->RawData();
+		for(uint32_t i=0; i<wordlen; i++)
+		{
+			uint8_t* p = src + i*4;
+			uint32_t tmp =
+				(p[3] << 24) |
+				(p[2] << 16) |
+				(p[1] << 8) |
+				(p[0] << 0);
+
+			m_txBuf->tx_word = tmp;
+			asm("dmb st");
+		}
+
+		//Commit
+		m_txBuf->tx_commit = 1;
+
+		//Done, put on free list
+		if(markFree)
+			m_txFreeList.Push(frame);
+
+
+	#elif defined( HAVE_MDMA )
 
 		//Make sure the previous DMA has completed before we try to reconfigure the channel
 		m_dmaChannel->WaitIdle();
@@ -187,7 +214,7 @@ void APBEthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 		//Send length field
 		m_txBuf->tx_len = len;
 
-		//Force 32 byte copies for now since the buffer doesn't support anything smaller yet
+		//Force 32 bit copies for now since the buffer doesn't support anything smaller yet
 		volatile uint32_t* dst = reinterpret_cast<volatile uint32_t*>(&m_txBuf->tx_buf[0]);
 		uint8_t* src = frame->RawData();
 		for(uint32_t i=0; i<wordlen; i++)
