@@ -110,16 +110,20 @@ void CryptoEngine::DeriveSessionKey(uint8_t* sharedSecret, uint8_t* exchangeHash
 	SHA256_Final(out);
 }
 
+#ifndef NO_SOFTWARE_25519
 void CryptoEngine::SharedSecret(uint8_t* sharedSecret, uint8_t* clientPublicKey)
 {
 	crypto_scalarmult(sharedSecret, m_ephemeralkeyPriv, clientPublicKey);
 }
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Host key generation
 
 /**
 	@brief Performs initial host key generation
+
+	TODO: hardware accelerate this so we can remove crypto_sign_keypair from the software implementation
  */
 void CryptoEngine::GenerateHostKey()
 {
@@ -127,6 +131,7 @@ void CryptoEngine::GenerateHostKey()
 	crypto_sign_keypair(m_hostkeyPub, m_hostkeyPriv);
 }
 
+#ifndef NO_SOFTWARE_25519
 /**
 	@brief Generates an x25519 key pair.
 
@@ -144,6 +149,7 @@ void CryptoEngine::GenerateX25519KeyPair(uint8_t* pub)
 
 	crypto_scalarmult_base(pub, m_ephemeralkeyPriv);
 }
+#endif
 
 /**
 	@brief Gets the host key fingerprint (base64 encoded SHA256).
@@ -186,6 +192,8 @@ void CryptoEngine::GetKeyFingerprint(char* buf, size_t len, uint8_t* pubkey)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Signature creation and verification
 
+#ifndef NO_SOFTWARE_25519
+
 ///@brief Signs an exchange hash with our host key
 void CryptoEngine::SignExchangeHash(uint8_t* sigOut, uint8_t* exchangeHash)
 {
@@ -215,3 +223,4 @@ bool CryptoEngine::VerifySignature(uint8_t* signedMessage, uint32_t lengthInclud
 	unsigned char tmpbuf[1024];
 	return (0 == crypto_sign_open(tmpbuf, signedMessage, lengthIncludingSignature, publicKey));
 }
+#endif

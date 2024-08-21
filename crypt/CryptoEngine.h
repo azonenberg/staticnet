@@ -46,6 +46,12 @@
 #define GCM_TAG_SIZE		16
 #define ECDSA_SIG_SIZE		64
 
+#ifdef NO_SOFTWARE_25519
+#define SOFTWARE_25519_METHOD =0
+#else
+#define SOFTWARE_25519_METHOD
+#endif
+
 /**
 	@brief Interface to an external crypto library or accelerator
 
@@ -66,7 +72,7 @@ public:
 		memcpy(m_hostkeyPub, pub, ECDSA_KEY_SIZE);
 	}
 
-	void GenerateHostKey();
+	virtual void GenerateHostKey();
 
 	virtual void Clear();
 
@@ -77,7 +83,7 @@ public:
 
 		The public key is stored in the provided buffer, which must be at least 32 bytes in size.
 	 */
-	virtual void GenerateX25519KeyPair(uint8_t* pub);
+	virtual void GenerateX25519KeyPair(uint8_t* pub) SOFTWARE_25519_METHOD;
 
 	///@brief Returns the host public key
 	static const uint8_t* GetHostPublicKey()
@@ -88,12 +94,15 @@ public:
 	{ return m_hostkeyPriv; }
 
 	///@brief Signs an exchange hash with our host key
-	virtual void SignExchangeHash(uint8_t* sigOut, uint8_t* exchangeHash);
+	virtual void SignExchangeHash(uint8_t* sigOut, uint8_t* exchangeHash) SOFTWARE_25519_METHOD;
 
-	virtual bool VerifySignature(uint8_t* signedMessage, uint32_t lengthIncludingSignature, uint8_t* publicKey);
+	virtual bool VerifySignature(
+		uint8_t* signedMessage,
+		uint32_t lengthIncludingSignature,
+		uint8_t* publicKey) SOFTWARE_25519_METHOD;
 
 	///@brief Calculates the shared secret between our ephemeral private key and the client's public key
-	virtual void SharedSecret(uint8_t* sharedSecret, uint8_t* clientPublicKey);
+	virtual void SharedSecret(uint8_t* sharedSecret, uint8_t* clientPublicKey) SOFTWARE_25519_METHOD;
 
 	///@brief Initialize the SHA-256 context
 	virtual void SHA256_Init() =0;
