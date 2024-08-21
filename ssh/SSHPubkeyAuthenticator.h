@@ -42,7 +42,6 @@
 class SSHPubkeyAuthenticator
 {
 public:
-	virtual ~SSHPubkeyAuthenticator() =default;
 
 	/**
 		@brief Checks if we are allowed to authenticate with a given username and public key.

@@ -173,7 +173,6 @@ class SSHTransportServer : public TCPServer<SSH_TABLE_SIZE, SSHConnectionState>
 {
 public:
 	SSHTransportServer(TCPProtocol& tcp);
-	virtual ~SSHTransportServer();
 
 	//Event handlers
 	virtual void OnConnectionAccepted(TCPTableEntry* socket) override;

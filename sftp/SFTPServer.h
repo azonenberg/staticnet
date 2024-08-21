@@ -97,7 +97,6 @@ class SFTPServer
 {
 public:
 	SFTPServer();
-	virtual ~SFTPServer();
 
 	virtual void OnConnectionAccepted(int id, SFTPConnectionState* state);
 	bool OnRxData(int id, SFTPConnectionState* state, TCPTableEntry* socket, uint8_t* data, uint16_t len);
