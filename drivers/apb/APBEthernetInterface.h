@@ -42,10 +42,14 @@
 #include <APB_EthernetTxBuffer_10G.h>
 
 ///@brief Number of frame buffers to allocate for frame reception
+#ifndef APB_RX_BUFCOUNT
 #define APB_RX_BUFCOUNT 8
+#endif
 
 ///@brief Number of frame buffers to allocate for frame transmission
+#ifndef APB_TX_BUFCOUNT
 #define APB_TX_BUFCOUNT 8
+#endif
 
 //Pull in STM32 headers if we're on one (TODO better detection)
 #if !defined(SIMULATION) && !defined(SOFTCORE_NO_IRQ)
