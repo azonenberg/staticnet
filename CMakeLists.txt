@@ -36,8 +36,9 @@ add_library(staticnet STATIC
 
 	net/icmpv4/ICMPv4Protocol.cpp
 
-	net/ipv4/IPv4Packet.cpp
 	net/ipv4/IPv4Protocol.cpp
+
+	net/ipv6/IPv6Protocol.cpp
 
 	net/tcp/TCPProtocol.cpp
 	net/tcp/TCPSegment.cpp

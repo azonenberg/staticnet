@@ -29,35 +29,82 @@
 
 /**
 	@file
-	@brief Main header file for staticnet library.
+	@brief Declaration of IPv6Packet
  */
 
-#ifndef staticnet_h
-#define staticnet_h
+#ifndef IPv6Packet_h
+#define IPv6Packet_h
 
-//provided by your project, must be in the search path
-#include <staticnet-config.h>
+#include "../ipv6/IPv6Address.h"
 
-//Pull in STM32 headers if we're on one (TODO better detection)
-#if !defined(SIMULATION) && !defined(SOFTCORE_NO_IRQ)
-#include <stm32.h>
-#include <peripheral/MDMA.h>
-#endif
+/**
+	@brief An IPv6 packet sent over Ethernet
+ */
+class __attribute__((packed)) IPv6Packet
+{
+public:
 
-#include <stdint.h>
-#include <memory.h>
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Byte ordering correction
 
-#include "../drivers/base/EthernetInterface.h"
-#include "../net/ethernet/EthernetProtocol.h"
-#include "../net/arp/ARPProtocol.h"
-#include "../net/ipv4/IPv4Protocol.h"
-#include "../net/ipv6/IPv6Protocol.h"
-#include "../net/icmpv4/ICMPv4Protocol.h"
-#include "../net/tcp/TCPProtocol.h"
-#include "../net/udp/UDPProtocol.h"
+	void ByteSwap()
+	{
+		//m_totalLength = __builtin_bswap16(m_totalLength);
+		//Don't waste time swapping frag ID because we don't support fragmentation
+		//Checksum is patched up later on during the sending path
+	}
 
-//Constants used for FNV hash
-#define FNV_INITIAL	0x811c9dc5
-#define FNV_MULT	0x01000193
+	/*
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Accessors for actual packet data
+
+	uint16_t HeaderLength()
+	{ return (m_versionAndHeaderLen & 0xf) * 4; }
+
+	uint16_t PayloadLength()
+	{ return m_totalLength - HeaderLength(); }
+
+	uint8_t* Payload()
+	{ return reinterpret_cast<uint8_t*>(this) + HeaderLength(); }
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Data members
+
+	///@brief Always 0x45 (options not supported)
+	uint8_t m_versionAndHeaderLen;
+
+	///@brief differentiated services / explicit congestion (ignored)
+	uint8_t m_dscpAndECN;
+
+	///@brief Total packet length including headers and data
+	uint16_t m_totalLength;
+
+	///@brief Fragment ID (ignored, we don't support fragmentation)
+	uint16_t m_fragID;
+
+	///@brief Flags and fragment offset
+	uint8_t m_flagsFragOffHigh;
+
+	///@brief Low half of fragment offset (not used, we don't support fragmentation)
+	uint8_t m_fragOffLow;
+
+	///@brief Time to live (ignored by us, only used by routers)
+	uint8_t m_ttl;
+
+	///@brief Upper layer protocol ID
+	uint8_t m_protocol;
+
+	///@brief Checksum over the IP header
+	uint16_t m_headerChecksum;
+
+	///@brief Origin of the packet
+	IPv6Address m_sourceAddress;
+
+	///@brief Destination of the packet
+	IPv6Address m_destAddress;
+
+	//Options and upper layer protocol data past here
+	*/
+};
 
 #endif

@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -27,15 +27,25 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-#include <staticnet-config.h>
-#include <staticnet/stack/staticnet.h>
+/**
+	@file
+	@brief Declaration of IPv6Address
+ */
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Byte swapping
+#ifndef IPv6Address_h
+#define IPv6Address_h
 
-void IPv4Packet::ByteSwap()
+#define IPV6_ADDR_SIZE 16
+#define IPV6_ADDR_BLOCK_SIZE (IPV6_ADDR_SIZE / sizeof(uint16_t))
+
+/**
+	@brief An IPv6 address
+ */
+union IPv6Address
 {
-	m_totalLength = __builtin_bswap16(m_totalLength);
-	//Don't waste time swapping frag ID because we don't support fragmentation
-	//Checksum is patched up later on during the sending path
-}
+	uint8_t m_octets[IPV6_ADDR_SIZE];
+	uint16_t m_blocks[IPV6_ADDR_BLOCK_SIZE];
+	uint32_t m_words[4];
+};
+
+#endif
