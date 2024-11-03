@@ -49,53 +49,33 @@ public:
 
 	void ByteSwap()
 	{
-		//m_totalLength = __builtin_bswap16(m_totalLength);
-		//Don't waste time swapping frag ID because we don't support fragmentation
-		//Checksum is patched up later on during the sending path
+		m_versionTrafficClassFlowLabel = __builtin_bswap32(m_versionTrafficClassFlowLabel);
+		m_payloadLength = __builtin_bswap16(m_payloadLength);
+
+		//addresses always in network byte order for now
 	}
 
-	/*
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Accessors for actual packet data
 
-	uint16_t HeaderLength()
-	{ return (m_versionAndHeaderLen & 0xf) * 4; }
-
-	uint16_t PayloadLength()
-	{ return m_totalLength - HeaderLength(); }
-
+	//for now this returns payload including all extensions
 	uint8_t* Payload()
-	{ return reinterpret_cast<uint8_t*>(this) + HeaderLength(); }
+	{ return reinterpret_cast<uint8_t*>(this) + m_payloadLength; }
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Data members
 
-	///@brief Always 0x45 (options not supported)
-	uint8_t m_versionAndHeaderLen;
+	///@brief Always 0x6, traffic class, and flow label
+	uint32_t m_versionTrafficClassFlowLabel;
 
-	///@brief differentiated services / explicit congestion (ignored)
-	uint8_t m_dscpAndECN;
+	///@brief Upper layer + extension length
+	uint16_t m_payloadLength;
 
-	///@brief Total packet length including headers and data
-	uint16_t m_totalLength;
+	///@brief Upper layer protocol (or extension type)
+	uint8_t m_nextHeader;
 
-	///@brief Fragment ID (ignored, we don't support fragmentation)
-	uint16_t m_fragID;
-
-	///@brief Flags and fragment offset
-	uint8_t m_flagsFragOffHigh;
-
-	///@brief Low half of fragment offset (not used, we don't support fragmentation)
-	uint8_t m_fragOffLow;
-
-	///@brief Time to live (ignored by us, only used by routers)
-	uint8_t m_ttl;
-
-	///@brief Upper layer protocol ID
-	uint8_t m_protocol;
-
-	///@brief Checksum over the IP header
-	uint16_t m_headerChecksum;
+	///@brief Network layer TTL
+	uint8_t m_hopLimit;
 
 	///@brief Origin of the packet
 	IPv6Address m_sourceAddress;
@@ -104,7 +84,6 @@ public:
 	IPv6Address m_destAddress;
 
 	//Options and upper layer protocol data past here
-	*/
 };
 
 #endif

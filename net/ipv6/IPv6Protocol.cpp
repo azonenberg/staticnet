@@ -36,6 +36,9 @@
 #include <stm32.h>
 #endif
 
+//DEBUG
+#include "../../../common-embedded-platform/core/platform.h"
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
 
@@ -158,9 +161,11 @@ bool IPv6Protocol::IsLocalSubnet(IPv6Address addr)
 /**
 	@brief Handle an incoming IPv6 packet
  */
-/*
 void IPv6Protocol::OnRxPacket(IPv6Packet* packet, uint16_t ethernetPayloadLength)
 {
+	g_log("IPv6Protocol::OnRxPacket(%u bytes)\n", (uint32_t)ethernetPayloadLength);
+
+	/*
 	//Compute the checksum before doing byte swapping, since it expects network byte order
 	//OK to do this before sanity checking the length, because the packet buffer is always a full MTU in size.
 	//Worst case a corrupted length field will lead to us checksumming garbage data after the end of the packet,
@@ -247,8 +252,8 @@ void IPv6Protocol::OnRxPacket(IPv6Packet* packet, uint16_t ethernetPayloadLength
 		default:
 			break;
 	}
+	*/
 }
-*/
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Link state changes
@@ -256,25 +261,23 @@ void IPv6Protocol::OnRxPacket(IPv6Packet* packet, uint16_t ethernetPayloadLength
 /**
 	@brief Called when the link comes up
  */
-/*
 void IPv6Protocol::OnLinkUp()
 {
+	/*
 	//Send an ARP query for the default gateway
 	auto arp = m_eth.GetARP();
 	if(arp)
 		arp->SendQuery(m_config.m_gateway);
+	*/
 }
-*/
 
 /**
 	@brief Called when the link goes down
  */
-/*
 void IPv6Protocol::OnLinkDown()
 {
-	m_cache.Clear();
+	//m_cache.Clear();
 }
-*/
 
 /**
 	@brief Called at 1 Hz to handle cache aging

@@ -40,6 +40,7 @@
 
 class ARPProtocol;
 class IPv4Protocol;
+class IPv6Protocol;
 
 /**
 	@brief Ethernet protocol handling
@@ -77,6 +78,9 @@ public:
 	void UseIPv4(IPv4Protocol* ipv4)
 	{ m_ipv4 = ipv4; }
 
+	void UseIPv6(IPv6Protocol* ipv6)
+	{ m_ipv6 = ipv6; }
+
 	const MACAddress& GetMACAddress()
 	{ return m_mac; }
 
@@ -105,6 +109,9 @@ protected:
 
 	///@brief The IPv4 protocol stack for this port (if present)
 	IPv4Protocol* m_ipv4;
+
+	///@brief The IPv6 protocol stack for this port (if present)
+	IPv6Protocol* m_ipv6;
 
 	///@brief Link state
 	bool m_linkUp;

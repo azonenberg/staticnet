@@ -40,6 +40,7 @@ EthernetProtocol::EthernetProtocol(EthernetInterface& iface, MACAddress our_mac)
 	, m_mac(our_mac)
 	, m_arp(nullptr)
 	, m_ipv4(nullptr)
+	, m_ipv6(nullptr)
 	, m_linkUp(false)
 {
 
@@ -54,14 +55,16 @@ void EthernetProtocol::OnLinkUp()
 
 	if(m_ipv4)
 		m_ipv4->OnLinkUp();
+	if(m_ipv6)
+		m_ipv6->OnLinkUp();
 }
 
 void EthernetProtocol::OnLinkDown()
 {
 	m_linkUp = false;
 
-	if(m_ipv4)
-		m_ipv4->OnLinkDown();
+	if(m_ipv6)
+		m_ipv6->OnLinkDown();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -118,8 +121,11 @@ void EthernetProtocol::OnRxFrame(EthernetFrame* frame)
 			}
 			break;
 
-		//TODO: IPv6
+		//Process IPv6 frames if we have an attached IPv6 stack.
+		//Don't bother checking length, upper layer can do that
 		case ETHERTYPE_IPV6:
+			if(m_ipv6)
+				m_ipv6->OnRxPacket(reinterpret_cast<IPv6Packet*>(frame->Payload()), plen);
 			break;
 
 		//unrecognized ethertype, ignore

@@ -98,11 +98,12 @@ public:
 	///@brief Cancels sending of a packet
 	void CancelTxPacket(IPv6Packet* packet)
 	{ m_eth.CancelTxFrame(reinterpret_cast<EthernetFrame*>(reinterpret_cast<uint8_t*>(packet) - ETHERNET_PAYLOAD_OFFSET)); }
-
+	*/
 	void OnRxPacket(IPv6Packet* packet, uint16_t ethernetPayloadLength);
 
 	void OnLinkUp();
 	void OnLinkDown();
+	/*
 	void OnAgingTick();
 	void OnAgingTick10x();
 
