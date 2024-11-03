@@ -71,7 +71,7 @@ class UDPProtocol;
 class IPv6Protocol
 {
 public:
-	IPv6Protocol(EthernetProtocol& eth, IPv6Config& config, ARPCache& cache);
+	IPv6Protocol(EthernetProtocol& eth, IPv6Config& config);
 
 	IPv6Protocol(const IPv6Protocol& rhs) =delete;
 
@@ -140,13 +140,10 @@ protected:
 	*/
 	///@brief The Ethernet protocol stack
 	EthernetProtocol& m_eth;
-	/*
+
 	///@brief Our local IP address configuration
 	IPv6Config& m_config;
-
-	///@brief Cache for storing IP -> MAC associations
-	ARPCache& m_cache;
-
+	/*
 	///@brief ICMPv4 protocol
 	ICMPv4Protocol* m_icmpv4;
 

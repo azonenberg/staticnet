@@ -45,10 +45,10 @@
 /**
 	@brief Initializes the IPv6 protocol stack
  */
-IPv6Protocol::IPv6Protocol(EthernetProtocol& eth, IPv6Config& config, ARPCache& cache)
+IPv6Protocol::IPv6Protocol(EthernetProtocol& eth, IPv6Config& config)
 	: m_eth(eth)
-	/*, m_config(config)
-	, m_cache(cache)
+	, m_config(config)
+	/*
 	, m_icmpv4(nullptr)
 	, m_tcp(nullptr)
 	, m_udp(nullptr)
