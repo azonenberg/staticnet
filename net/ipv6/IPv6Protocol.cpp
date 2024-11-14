@@ -48,12 +48,10 @@
 IPv6Protocol::IPv6Protocol(EthernetProtocol& eth, IPv6Config& config)
 	: m_eth(eth)
 	, m_config(config)
-	/*
-	, m_icmpv4(nullptr)
-	, m_tcp(nullptr)
-	, m_udp(nullptr)
+	//, m_icmpv4(nullptr)
+	//, m_tcp(nullptr)
+	//, m_udp(nullptr)
 	, m_allowUnknownUnicasts(false)
-	*/
 {
 
 }
@@ -129,21 +127,20 @@ uint16_t IPv6Protocol::PseudoHeaderChecksum(IPv6Packet* packet, uint16_t length)
 /**
 	@brief Figures out if an address is a unicast to us, a broad/multicast, or something else
  */
-/*
 IPv6Protocol::AddressType IPv6Protocol::GetAddressType(IPv6Address addr)
 {
-	if(addr == m_config.m_address)
-		return ADDR_UNICAST_US;
-	else if(addr == m_config.m_broadcast)
-		return ADDR_BROADCAST;
-	else if(addr.m_word == 0xffffffff)
-		return ADDR_BROADCAST;
-	else if((addr.m_octets[0] & 0xf0) == 0xe0)
+	//Multicast have the most significant byte set
+	if(addr.m_octets[0] == 0xff)
 		return ADDR_MULTICAST;
+
+	//TODO: check for match to our link local or globally routable addresses
+	//if(addr == m_config.m_address)
+	//	return ADDR_UNICAST_US;
+
+	//For anything else
 	else
 		return ADDR_UNICAST_OTHER;
 }
-*/
 
 /**
 	@brief Checks if an address is in our local subnet or not
@@ -163,41 +160,45 @@ bool IPv6Protocol::IsLocalSubnet(IPv6Address addr)
  */
 void IPv6Protocol::OnRxPacket(IPv6Packet* packet, uint16_t ethernetPayloadLength)
 {
+	//See what we got
 	g_log("IPv6Protocol::OnRxPacket(%u bytes)\n", (uint32_t)ethernetPayloadLength);
+	LogIndenter li(g_log);
 
-	/*
-	//Compute the checksum before doing byte swapping, since it expects network byte order
-	//OK to do this before sanity checking the length, because the packet buffer is always a full MTU in size.
-	//Worst case a corrupted length field will lead to us checksumming garbage data after the end of the packet,
-	//but it's guaranteed to be a readable memory address.
-	if(0xffff != InternetChecksum(reinterpret_cast<uint8_t*>(packet), packet->HeaderLength()))
-		return;
+	//There's no checksum over the IPv6 header! So nothing special to do there
 
 	//Swap header fields to host byte order
 	packet->ByteSwap();
 
-	//Must be a well formed packet with no header options
-	if(packet->m_versionAndHeaderLen != 0x45)
+	//Must be IPv6, ignore traffic class and flow label
+	if( (packet->m_versionTrafficClassFlowLabel & 0xf0000000) != 0x60000000)
 		return;
 
-	//ignore DSCP / ECN
-
-	//Length must be plausible (enough to hold headers and not more than the received packet size)
-	if( (packet->m_totalLength < 20) || (packet->m_totalLength > ethernetPayloadLength) )
+	//Length must be plausible (not more than the MTU, we don't support fragmentation)
+	if( (packet->m_payloadLength + 36) > ethernetPayloadLength)
 		return;
 
-	//Ignore fragment ID
+	//Ignore hop limit
 
-	//Flags must have evil bit and more-fragments bit clear, and no frag offset (not a fragment)
-	//Ignore DF bit.
-	if( (packet->m_flagsFragOffHigh & 0xbf) != 0)
-		return;
-	if(packet->m_fragOffLow != 0)
-		return;
+	//Print source address
+	g_log("From: %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",
+		__builtin_bswap16(packet->m_sourceAddress.m_blocks[0]),
+		__builtin_bswap16(packet->m_sourceAddress.m_blocks[1]),
+		__builtin_bswap16(packet->m_sourceAddress.m_blocks[2]),
+		__builtin_bswap16(packet->m_sourceAddress.m_blocks[3]),
+		__builtin_bswap16(packet->m_sourceAddress.m_blocks[4]),
+		__builtin_bswap16(packet->m_sourceAddress.m_blocks[5]),
+		__builtin_bswap16(packet->m_sourceAddress.m_blocks[6]),
+		__builtin_bswap16(packet->m_sourceAddress.m_blocks[7]));
 
-	//Ignore TTL
-
-	//Header checksum is already validated
+	g_log("To:   %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",
+		__builtin_bswap16(packet->m_destAddress.m_blocks[0]),
+		__builtin_bswap16(packet->m_destAddress.m_blocks[1]),
+		__builtin_bswap16(packet->m_destAddress.m_blocks[2]),
+		__builtin_bswap16(packet->m_destAddress.m_blocks[3]),
+		__builtin_bswap16(packet->m_destAddress.m_blocks[4]),
+		__builtin_bswap16(packet->m_destAddress.m_blocks[5]),
+		__builtin_bswap16(packet->m_destAddress.m_blocks[6]),
+		__builtin_bswap16(packet->m_destAddress.m_blocks[7]));
 
 	//See what dest address is. It should be us, multicast, or broadcast.
 	//Discard any packet that isn't for an address we care about
@@ -206,6 +207,20 @@ void IPv6Protocol::OnRxPacket(IPv6Packet* packet, uint16_t ethernetPayloadLength
 	if( (type == ADDR_UNICAST_OTHER) && !m_allowUnknownUnicasts)
 		return;
 
+	//Figure out the upper layer protocol
+	switch(packet->m_nextHeader)
+	{
+		case IP_PROTO_ICMPV6:
+			g_log("ICMPv6\n");
+			break;
+
+		//
+		default:
+			g_log("Unknown next header %d, ignoring\n", packet->m_nextHeader);
+			break;
+	}
+
+	/*
 	//Figure out the upper layer protocol
 	uint16_t plen = packet->PayloadLength();
 	switch(packet->m_protocol)

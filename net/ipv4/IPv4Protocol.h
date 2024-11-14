@@ -38,6 +38,7 @@
 #include <stdint.h>
 #include "IPv4Address.h"
 #include "IPv4Packet.h"
+#include "../IPProtocols.h"
 
 inline bool operator!= (const IPv4Address& a, const IPv4Address& b)
 { return a.m_word != b.m_word; }
@@ -80,13 +81,6 @@ public:
 	 */
 	void SetAllowUnknownUnicasts(bool allow)
 	{ m_allowUnknownUnicasts = allow; }
-
-	enum ipproto_t
-	{
-		IP_PROTO_ICMP	= 1,
-		IP_PROTO_TCP	= 6,
-		IP_PROTO_UDP	= 17
-	};
 
 	IPv4Packet* GetTxPacket(IPv4Address dest, ipproto_t proto);
 	void SendTxPacket(IPv4Packet* packet, size_t upperLayerLength, bool markFree = true);

@@ -184,7 +184,7 @@ void TCPProtocol::OnRxSYN(TCPSegment* segment, IPv4Address sourceAddress)
 	if(!IsPortOpen(segment->m_destPort))
 	{
 		//Get ready to send a reply, if no free buffers give up
-		auto reply = m_ipv4->GetTxPacket(sourceAddress, IPv4Protocol::IP_PROTO_TCP);
+		auto reply = m_ipv4->GetTxPacket(sourceAddress, IP_PROTO_TCP);
 		if(reply == nullptr)
 			return;
 
@@ -428,7 +428,7 @@ __attribute__((section(".tcmtext")))
 IPv4Packet* TCPProtocol::CreateReply(TCPTableEntry* state)
 {
 	//Get ready to send a reply, if no free buffers give up
-	auto reply = m_ipv4->GetTxPacket(state->m_remoteIP, IPv4Protocol::IP_PROTO_TCP);
+	auto reply = m_ipv4->GetTxPacket(state->m_remoteIP, IP_PROTO_TCP);
 	if(reply == nullptr)
 		return nullptr;
 

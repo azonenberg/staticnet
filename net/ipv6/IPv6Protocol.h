@@ -38,6 +38,7 @@
 #include <stdint.h>
 #include "IPv6Address.h"
 #include "IPv6Packet.h"
+#include "../IPProtocols.h"
 
 /*
 inline bool operator!= (const IPv6Address& a, const IPv6Address& b)
@@ -77,28 +78,20 @@ public:
 
 	/**
 		@brief Enables reception of unicast IPv6 packets to addresses other than what we currently have configured
-
-		This is typically needed for DHCP to work.
 	 */
-	/*
 	void SetAllowUnknownUnicasts(bool allow)
 	{ m_allowUnknownUnicasts = allow; }
 
-	enum ipproto_t
-	{
-		IP_PROTO_ICMP	= 1,
-		IP_PROTO_TCP	= 6,
-		IP_PROTO_UDP	= 17
-	};
-
+	/*
 	IPv6Packet* GetTxPacket(IPv6Address dest, ipproto_t proto);
 	void SendTxPacket(IPv6Packet* packet, size_t upperLayerLength, bool markFree = true);
 	void ResendTxPacket(IPv6Packet* packet, bool markFree = false);
+	*/
 
 	///@brief Cancels sending of a packet
 	void CancelTxPacket(IPv6Packet* packet)
 	{ m_eth.CancelTxFrame(reinterpret_cast<EthernetFrame*>(reinterpret_cast<uint8_t*>(packet) - ETHERNET_PAYLOAD_OFFSET)); }
-	*/
+
 	void OnRxPacket(IPv6Packet* packet, uint16_t ethernetPayloadLength);
 
 	void OnLinkUp();
@@ -109,15 +102,15 @@ public:
 
 	static uint16_t InternetChecksum(uint8_t* data, uint16_t len, uint16_t initial = 0);
 	uint16_t PseudoHeaderChecksum(IPv6Packet* packet, uint16_t length);
-
+	*/
 	enum AddressType
 	{
-		ADDR_BROADCAST,		//packet was for a broadcast address
 		ADDR_MULTICAST,		//packet was for a multicast address
 		ADDR_UNICAST_US,	//packet was for our IP
 		ADDR_UNICAST_OTHER	//packet was for someone else (only valid in promiscuous mode)
 	};
 
+	/*
 	void UseICMPv4(ICMPv4Protocol* icmpv4)
 	{ m_icmpv4 = icmpv4; }
 
@@ -126,8 +119,10 @@ public:
 
 	void UseUDP(UDPProtocol* udp)
 	{ m_udp = udp; }
+	*/
 
 	AddressType GetAddressType(IPv6Address addr);
+	/*
 	bool IsLocalSubnet(IPv6Address addr);
 
 	EthernetProtocol* GetEthernet()
@@ -152,10 +147,10 @@ protected:
 
 	///@brief UDP protocol
 	UDPProtocol* m_udp;
+	*/
 
 	///@brief True to forward unicasts to unknown addresses to us
 	bool m_allowUnknownUnicasts;
-	*/
 };
 
 #endif

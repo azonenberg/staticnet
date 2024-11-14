@@ -27,122 +27,24 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-#include <staticnet-config.h>
-#include <staticnet/stack/staticnet.h>
+/**
+	@file
+	@brief Sizes and other definitions used by IPv4 and IPV6 protocol logic
+ */
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Construction / destruction
-
-UDPProtocol::UDPProtocol(IPv4Protocol* ipv4)
-	: m_ipv4(ipv4)
-{
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Handler for incoming packets
+#ifndef IPProtocols_h
+#define IPProtocols_h
 
 /**
-	@brief Handles an incoming UDP packet
+	@brief IP protocol numbers
  */
-#ifdef HAVE_ITCM
-__attribute__((section(".tcmtext")))
+enum ipproto_t
+{
+	IP_PROTO_ICMP	= 1,
+	IP_PROTO_TCP	= 6,
+	IP_PROTO_UDP	= 17,
+	IP_PROTO_ICMPV6	= 58
+};
+
 #endif
-void UDPProtocol::OnRxPacket(
-	UDPPacket* packet,
-	uint16_t ipPayloadLength,
-	IPv4Address sourceAddress,
-	uint16_t pseudoHeaderChecksum)
-{
-	//Drop any packets too small for a complete UDP header
-	if(ipPayloadLength < 8)
-		return;
-
-	//Verify checksum of packet body
-	if(0xffff != IPv4Protocol::InternetChecksum(
-		reinterpret_cast<uint8_t*>(packet),
-		ipPayloadLength,
-		pseudoHeaderChecksum))
-	{
-		return;
-	}
-	packet->ByteSwap();
-
-	//Sanity check packet length fits in the packet
-	if(packet->m_len > ipPayloadLength)
-		return;
-
-	//Handle the incoming packet
-	OnRxData(sourceAddress, packet->m_sourcePort, packet->m_destPort, packet->Payload(), packet->m_len);
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Outbound traffic
-
-#ifdef HAVE_ITCM
-__attribute__((section(".tcmtext")))
-#endif
-UDPPacket* UDPProtocol::GetTxPacket(IPv4Address dstip)
-{
-	//Allocate the frame and fail if we couldn't allocate one
-	auto reply = m_ipv4->GetTxPacket(dstip, IP_PROTO_UDP);
-	if(reply == nullptr)
-		return nullptr;
-
-	//All good, return the packet
-	return reinterpret_cast<UDPPacket*>(reply->Payload());
-}
-
-void UDPProtocol::CancelTxPacket(UDPPacket* packet)
-{
-	//Cancel the packet in the upper layer
-	m_ipv4->CancelTxPacket(reinterpret_cast<IPv4Packet*>(reinterpret_cast<uint8_t*>(packet) - sizeof(IPv4Packet)));
-}
-
-/**
-	@brief Does final prep and sends a UDP packet
- */
-#ifdef HAVE_ITCM
-__attribute__((section(".tcmtext")))
-#endif
-void UDPProtocol::SendTxPacket(UDPPacket* packet, uint16_t sport, uint16_t dport, uint16_t payloadLen)
-{
-	auto length = payloadLen + 8;
-
-	//Fill out the headers
-	packet->m_sourcePort = sport;
-	packet->m_destPort = dport;
-	packet->m_len = length;
-
-	//Calculate the pseudoheader checksum
-	auto ipack = packet->Parent();
-	auto pseudoHeaderChecksum = m_ipv4->PseudoHeaderChecksum(ipack, length);
-
-	//Zeroize the checksum when computing it
-	packet->m_checksum = 0;
-
-	//Need to be in network byte order before we send
-	packet->ByteSwap();
-	packet->m_checksum = ~__builtin_bswap16(
-		IPv4Protocol::InternetChecksum(reinterpret_cast<uint8_t*>(packet), length, pseudoHeaderChecksum));
-
-	//Actually send it
-	m_ipv4->SendTxPacket(ipack, length, true);
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Overrides for end user application logic
-
-/**
-	@brief Handles incoming packet data.
-
-	The default implementation does nothing.
- */
-void UDPProtocol::OnRxData(
-	[[maybe_unused]] IPv4Address srcip,
-	[[maybe_unused]] uint16_t sport,
-	[[maybe_unused]] uint16_t dport,
-	[[maybe_unused]] uint8_t* payload,
-	[[maybe_unused]] uint16_t payloadLen)
-{
-}
 

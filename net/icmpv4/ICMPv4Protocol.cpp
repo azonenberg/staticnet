@@ -1,8 +1,8 @@
 /***********************************************************************************************************************
 *                                                                                                                      *
-* staticnet v0.1                                                                                                       *
+* staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021 Andrew D. Zonenberg and contributors                                                              *
+* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -75,7 +75,7 @@ void ICMPv4Protocol::OnRxPacket(ICMPv4Packet* packet, uint16_t ipPayloadLength, 
 void ICMPv4Protocol::OnRxEchoRequest(ICMPv4Packet* packet, uint16_t ipPayloadLength, IPv4Address sourceAddress)
 {
 	//Get ready to send a reply
-	auto reply = m_ipv4.GetTxPacket(sourceAddress, IPv4Protocol::IP_PROTO_ICMP);
+	auto reply = m_ipv4.GetTxPacket(sourceAddress, IP_PROTO_ICMP);
 	if(reply == NULL)
 		return;
 
