@@ -59,9 +59,9 @@ APBEthernetInterface::APBEthernetInterface(
 #endif
 {
 	for(int i=0; i<APB_TX_BUFCOUNT; i++)
-		m_txFreeList.Push(&m_txBuffers[i]);
+		m_txFreeList.push_back(&m_txBuffers[i]);
 	for(int i=0; i<APB_RX_BUFCOUNT; i++)
-		m_rxFreeList.Push(&m_rxBuffers[i]);
+		m_rxFreeList.push_back(&m_rxBuffers[i]);
 
 	//TODO: hardware resets of peripherals?
 }
@@ -123,11 +123,15 @@ __attribute__((section(".tcmtext")))
 #endif
 EthernetFrame* APBEthernetInterface::GetTxFrame()
 {
-	if(m_txFreeList.IsEmpty())
+	if(m_txFreeList.empty())
 		return nullptr;
 
 	else
-		return m_txFreeList.Pop();
+	{
+		auto ret = m_txFreeList.back();
+		m_txFreeList.pop_back();
+		return ret;
+	}
 }
 
 #ifdef HAVE_ITCM
@@ -173,7 +177,7 @@ void APBEthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 
 		//Done, put on free list
 		if(markFree)
-			m_txFreeList.Push(frame);
+			m_txFreeList.push_back(frame);
 
 
 	#elif defined( HAVE_MDMA )
@@ -234,7 +238,7 @@ void APBEthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 
 		//Done, put on free list
 		if(markFree)
-			m_txFreeList.Push(frame);
+			m_txFreeList.push_back(frame);
 
 	#endif
 }
@@ -245,7 +249,7 @@ __attribute__((section(".tcmtext")))
 void APBEthernetInterface::CancelTxFrame(EthernetFrame* frame)
 {
 	//Return it to the free list
-	m_txFreeList.Push(frame);
+	m_txFreeList.push_back(frame);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -271,7 +275,7 @@ EthernetFrame* APBEthernetInterface::GetRxFrame()
 	}
 
 	//Make sure we have somewhere to put the frame
-	if(m_rxFreeList.IsEmpty())
+	if(m_rxFreeList.empty())
 	{
 		g_log("Frame dropped due to lack of buffers\n");
 
@@ -283,7 +287,8 @@ EthernetFrame* APBEthernetInterface::GetRxFrame()
 	//Read it
 	//TODO: DMA optimizations
 	//Round transaction length up to an integer number of 32-bit words to force 32-bit copies
-	auto frame = m_rxFreeList.Pop();
+	auto frame = m_rxFreeList.back();
+	m_rxFreeList.pop_back();
 	frame->SetLength(len);
 	uint32_t padlen = len;
 	if(padlen % 4)
@@ -299,5 +304,5 @@ __attribute__((section(".tcmtext")))
 #endif
 void APBEthernetInterface::ReleaseRxFrame(EthernetFrame* frame)
 {
-	m_rxFreeList.Push(frame);
+	m_rxFreeList.push_back(frame);
 }

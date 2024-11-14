@@ -35,7 +35,8 @@
 #ifndef APBEthernetInterface_h
 #define APBEthernetInterface_h
 
-#include <embedded-utils/FIFO.h>
+#include <etl/vector.h>
+
 #include <staticnet/drivers/base/EthernetInterface.h>
 
 #include <APB_EthernetRxBuffer.h>
@@ -82,13 +83,13 @@ protected:
 	__attribute__((aligned(16))) EthernetFrame m_rxBuffers[APB_RX_BUFCOUNT];
 
 	///@brief FIFO of RX buffers available for use
-	FIFO<EthernetFrame*, APB_RX_BUFCOUNT> m_rxFreeList;
+	etl::vector<EthernetFrame*, APB_RX_BUFCOUNT> m_rxFreeList;
 
 	///@brief TX packet buffers
 	__attribute__((aligned(16))) EthernetFrame m_txBuffers[APB_TX_BUFCOUNT];
 
 	///@brief FIFO of TX buffers available for use
-	FIFO<EthernetFrame*, APB_TX_BUFCOUNT> m_txFreeList;
+	etl::vector<EthernetFrame*, APB_TX_BUFCOUNT> m_txFreeList;
 
 	///@brief RX buffer
 	volatile APB_EthernetRxBuffer* m_rxBuf;
