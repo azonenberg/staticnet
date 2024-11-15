@@ -29,32 +29,20 @@
 
 /**
 	@file
-	@brief Declaration of IPv6Packet
+	@brief Declaration of ICMPv6Packet
  */
 
-#ifndef IPv6Packet_h
-#define IPv6Packet_h
+#ifndef ICMPv6Packet_h
+#define ICMPv6Packet_h
 
 #include "../ipv6/IPv6Address.h"
 
 /**
-	@brief An IPv6 packet sent over Ethernet
+	@brief An ICMP packet sent over IPv6
  */
-class __attribute__((packed)) IPv6Packet
+class __attribute__((packed)) ICMPv6Packet
 {
 public:
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Byte ordering correction
-
-	void ByteSwap()
-	{
-		m_versionTrafficClassFlowLabel = __builtin_bswap32(m_versionTrafficClassFlowLabel);
-		m_payloadLength = __builtin_bswap16(m_payloadLength);
-
-		//addresses always in network byte order for now
-	}
-
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Accessors for actual packet data
 
@@ -63,27 +51,26 @@ public:
 	{ return reinterpret_cast<uint8_t*>(this) + sizeof(*this); }
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Message type fields
+
+	enum icmptype_t
+	{
+		//TYPE_ECHO_REPLY		= 0,
+		//TYPE_ECHO_REQUEST	= 8
+		TYPE_ROUTER_ADVERTISEMENT	= 134
+	};
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Data members
 
-	///@brief Always 0x6, traffic class, and flow label
-	uint32_t m_versionTrafficClassFlowLabel;
+	///@brief Message type
+	uint8_t		m_type;
 
-	///@brief Upper layer + extension length
-	uint16_t m_payloadLength;
+	///@brief Message subtype
+	uint8_t		m_code;
 
-	///@brief Upper layer protocol (or extension type)
-	uint8_t m_nextHeader;
-
-	///@brief Network layer TTL
-	uint8_t m_hopLimit;
-
-	///@brief Origin of the packet
-	IPv6Address m_sourceAddress;
-
-	///@brief Destination of the packet
-	IPv6Address m_destAddress;
-
-	//Options and upper layer protocol data past here
+	///@brief Checksum of the ICMP header plus pseudo-header
+	uint16_t	m_checksum;
 };
 
 #endif

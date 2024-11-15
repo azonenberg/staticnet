@@ -59,12 +59,12 @@ public:
 	IPv6Address		m_broadcast;	//precomputed to save time
 	IPv6Address		m_gateway;
 };
-/*
-class ICMPv4Protocol;
+
+class ICMPv6Protocol;
 class TCPProtocol;
 class UDPProtocol;
 
-#define IPV4_PAYLOAD_MTU (ETHERNET_PAYLOAD_MTU - 20)*/
+//#define IPV4_PAYLOAD_MTU (ETHERNET_PAYLOAD_MTU - 20)
 
 /**
 	@brief IPv6 protocol driver
@@ -99,10 +99,9 @@ public:
 	/*
 	void OnAgingTick();
 	void OnAgingTick10x();
-
-	static uint16_t InternetChecksum(uint8_t* data, uint16_t len, uint16_t initial = 0);
-	uint16_t PseudoHeaderChecksum(IPv6Packet* packet, uint16_t length);
 	*/
+	uint16_t PseudoHeaderChecksum(IPv6Packet* packet);
+
 	enum AddressType
 	{
 		ADDR_MULTICAST,		//packet was for a multicast address
@@ -110,10 +109,9 @@ public:
 		ADDR_UNICAST_OTHER	//packet was for someone else (only valid in promiscuous mode)
 	};
 
+	void UseICMPv6(ICMPv6Protocol* icmpv6)
+	{ m_icmpv6 = icmpv6; }
 	/*
-	void UseICMPv4(ICMPv4Protocol* icmpv4)
-	{ m_icmpv4 = icmpv4; }
-
 	void UseTCP(TCPProtocol* tcp)
 	{ m_tcp = tcp; }
 
@@ -138,10 +136,10 @@ protected:
 
 	///@brief Our local IP address configuration
 	IPv6Config& m_config;
-	/*
-	///@brief ICMPv4 protocol
-	ICMPv4Protocol* m_icmpv4;
 
+	///@brief ICMPv6 protocol
+	ICMPv6Protocol* m_icmpv6;
+	/*
 	///@brief TCP protocol
 	TCPProtocol* m_tcp;
 

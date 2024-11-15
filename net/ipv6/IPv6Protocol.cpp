@@ -48,7 +48,7 @@
 IPv6Protocol::IPv6Protocol(EthernetProtocol& eth, IPv6Config& config)
 	: m_eth(eth)
 	, m_config(config)
-	//, m_icmpv4(nullptr)
+	, m_icmpv6(nullptr)
 	//, m_tcp(nullptr)
 	//, m_udp(nullptr)
 	, m_allowUnknownUnicasts(false)
@@ -60,66 +60,26 @@ IPv6Protocol::IPv6Protocol(EthernetProtocol& eth, IPv6Config& config)
 // Checksum calculation
 
 /**
-	@brief Computes the Internet Checksum on a block of data in network byte order.
- */
-/*
-#ifdef HAVE_ITCM
-__attribute__((section(".tcmtext")))
-#endif
-uint16_t IPv6Protocol::InternetChecksum(uint8_t* data, uint16_t len, uint16_t initial)
-{
-	//Sum in 16-bit blocks until we run out
-	uint16_t* data16 = reinterpret_cast<uint16_t*>(data);
-	uint32_t checksum = initial;
-	while(len >= 2)
-	{
-		checksum += __builtin_bswap16(*data16);
-
-		data16 ++;
-		len -= 2;
-	}
-
-	//Add the last byte if needed
-	if(len & 1)
-		checksum += __builtin_bswap16(*reinterpret_cast<uint8_t*>(data16));
-
-	//Handle carry-out
-	while(checksum > 0xffff)
-		checksum = (checksum >> 16) + (checksum & 0xffff);
-	return checksum;
-}
-*/
-
-/**
 	@brief Calculates the TCP/UDP pseudoheader checksum for a packet
  */
-/*
 #ifdef HAVE_ITCM
 __attribute__((section(".tcmtext")))
 #endif
-uint16_t IPv6Protocol::PseudoHeaderChecksum(IPv6Packet* packet, uint16_t length)
+uint16_t IPv6Protocol::PseudoHeaderChecksum(IPv6Packet* packet)
 {
+	uint16_t workingChecksum = IPv4Protocol::InternetChecksum(packet->m_sourceAddress.m_octets, 16);
+	workingChecksum = IPv4Protocol::InternetChecksum(packet->m_destAddress.m_octets, 16, workingChecksum);
+
 	uint8_t pseudoheader[]
 	{
-		packet->m_sourceAddress.m_octets[0],
-		packet->m_sourceAddress.m_octets[1],
-		packet->m_sourceAddress.m_octets[2],
-		packet->m_sourceAddress.m_octets[3],
-
-		packet->m_destAddress.m_octets[0],
-		packet->m_destAddress.m_octets[1],
-		packet->m_destAddress.m_octets[2],
-		packet->m_destAddress.m_octets[3],
-
 		0x0,
-		packet->m_protocol,
-		static_cast<uint8_t>(length >> 8),
-		static_cast<uint8_t>(length & 0xff)
+		packet->m_nextHeader,
+		static_cast<uint8_t>(packet->m_payloadLength >> 8),
+		static_cast<uint8_t>(packet->m_payloadLength & 0xff)
 	};
 
-	return InternetChecksum(pseudoheader, sizeof(pseudoheader));
+	return IPv4Protocol::InternetChecksum(pseudoheader, sizeof(pseudoheader), workingChecksum);
 }
-*/
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Routing helpers
@@ -161,8 +121,8 @@ bool IPv6Protocol::IsLocalSubnet(IPv6Address addr)
 void IPv6Protocol::OnRxPacket(IPv6Packet* packet, uint16_t ethernetPayloadLength)
 {
 	//See what we got
-	g_log("IPv6Protocol::OnRxPacket(%u bytes)\n", (uint32_t)ethernetPayloadLength);
-	LogIndenter li(g_log);
+/*	g_log("IPv6Protocol::OnRxPacket(%u bytes)\n", (uint32_t)ethernetPayloadLength);
+	LogIndenter li(g_log);*/
 
 	//There's no checksum over the IPv6 header! So nothing special to do there
 
@@ -180,7 +140,7 @@ void IPv6Protocol::OnRxPacket(IPv6Packet* packet, uint16_t ethernetPayloadLength
 	//Ignore hop limit
 
 	//Print source address
-	g_log("From: %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",
+	/*g_log("From: %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",
 		__builtin_bswap16(packet->m_sourceAddress.m_blocks[0]),
 		__builtin_bswap16(packet->m_sourceAddress.m_blocks[1]),
 		__builtin_bswap16(packet->m_sourceAddress.m_blocks[2]),
@@ -198,7 +158,7 @@ void IPv6Protocol::OnRxPacket(IPv6Packet* packet, uint16_t ethernetPayloadLength
 		__builtin_bswap16(packet->m_destAddress.m_blocks[4]),
 		__builtin_bswap16(packet->m_destAddress.m_blocks[5]),
 		__builtin_bswap16(packet->m_destAddress.m_blocks[6]),
-		__builtin_bswap16(packet->m_destAddress.m_blocks[7]));
+		__builtin_bswap16(packet->m_destAddress.m_blocks[7]));*/
 
 	//See what dest address is. It should be us, multicast, or broadcast.
 	//Discard any packet that isn't for an address we care about
@@ -210,63 +170,49 @@ void IPv6Protocol::OnRxPacket(IPv6Packet* packet, uint16_t ethernetPayloadLength
 	//Figure out the upper layer protocol
 	switch(packet->m_nextHeader)
 	{
+		//ICMPv6 can be unicast (ping) or multicast (router advertisement)
 		case IP_PROTO_ICMPV6:
-			g_log("ICMPv6\n");
+			if(m_icmpv6 && ( (type == ADDR_UNICAST_US) || (type == ADDR_MULTICAST) ) )
+			{
+				m_icmpv6->OnRxPacket(
+					reinterpret_cast<ICMPv6Packet*>(packet->Payload()),
+					packet->m_payloadLength,
+					packet->m_sourceAddress,
+					PseudoHeaderChecksum(packet));
+			}
 			break;
 
-		//
+		//Drop anything unrecognized
 		default:
 			g_log("Unknown next header %d, ignoring\n", packet->m_nextHeader);
 			break;
 	}
 
 	/*
-	//Figure out the upper layer protocol
-	uint16_t plen = packet->PayloadLength();
-	switch(packet->m_protocol)
-	{
-		//We respond to pings sent to unicast or broadcast addresses only.
-		//Ignore any multicast destinations for ICMP traffic.
-		case IP_PROTO_ICMP:
-			if(m_icmpv4 && ( (type == ADDR_UNICAST_US) || (type == ADDR_BROADCAST) ) )
-			{
-				m_icmpv4->OnRxPacket(
-					reinterpret_cast<ICMPv4Packet*>(packet->Payload()),
-					packet->PayloadLength(),
-					packet->m_sourceAddress);
-			}
+	//TCP segments must be directed at our unicast address.
+	//The connection oriented flow makes no sense to be broadcast/multicast.
+	case IP_PROTO_TCP:
+		if(m_tcp && (type == ADDR_UNICAST_US) )
+		{
+			m_tcp->OnRxPacket(
+				reinterpret_cast<TCPSegment*>(packet->Payload()),
+				plen,
+				packet->m_sourceAddress,
+				PseudoHeaderChecksum(packet, plen));
+		}
+		break;
 
-			break;
-
-		//TCP segments must be directed at our unicast address.
-		//The connection oriented flow makes no sense to be broadcast/multicast.
-		case IP_PROTO_TCP:
-			if(m_tcp && (type == ADDR_UNICAST_US) )
-			{
-				m_tcp->OnRxPacket(
-					reinterpret_cast<TCPSegment*>(packet->Payload()),
-					plen,
-					packet->m_sourceAddress,
-					PseudoHeaderChecksum(packet, plen));
-			}
-			break;
-
-		//Allow unknown unicasts on request for UDP to enable e.g. DHCP
-		case IP_PROTO_UDP:
-			if(m_udp && ( (type == ADDR_UNICAST_US) || m_allowUnknownUnicasts) )
-			{
-				m_udp->OnRxPacket(
-					reinterpret_cast<UDPPacket*>(packet->Payload()),
-					plen,
-					packet->m_sourceAddress,
-					PseudoHeaderChecksum(packet, plen));
-			}
-			break;
-
-		//ignore any unknown protocols
-		default:
-			break;
-	}
+	//Allow unknown unicasts on request for UDP to enable e.g. DHCP
+	case IP_PROTO_UDP:
+		if(m_udp && ( (type == ADDR_UNICAST_US) || m_allowUnknownUnicasts) )
+		{
+			m_udp->OnRxPacket(
+				reinterpret_cast<UDPPacket*>(packet->Payload()),
+				plen,
+				packet->m_sourceAddress,
+				PseudoHeaderChecksum(packet, plen));
+		}
+		break;
 	*/
 }
 

@@ -53,6 +53,7 @@
 #include "../net/ipv4/IPv4Protocol.h"
 #include "../net/ipv6/IPv6Protocol.h"
 #include "../net/icmpv4/ICMPv4Protocol.h"
+#include "../net/icmpv6/ICMPv6Protocol.h"
 #include "../net/tcp/TCPProtocol.h"
 #include "../net/udp/UDPProtocol.h"
 

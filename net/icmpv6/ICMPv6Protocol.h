@@ -29,61 +29,48 @@
 
 /**
 	@file
-	@brief Declaration of IPv6Packet
+	@brief Declaration of ICMPv6Protocol
  */
 
-#ifndef IPv6Packet_h
-#define IPv6Packet_h
+#ifndef ICMPv6Protocol_h
+#define ICMPv6Protocol_h
 
-#include "../ipv6/IPv6Address.h"
+#include "ICMPv6Packet.h"
 
 /**
-	@brief An IPv6 packet sent over Ethernet
+	@brief ICMPv6 protocol driver
  */
-class __attribute__((packed)) IPv6Packet
+class ICMPv6Protocol
 {
 public:
+	ICMPv6Protocol(IPv6Protocol& proto);
 
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Byte ordering correction
+	void OnRxPacket(
+		ICMPv6Packet* packet,
+		uint16_t ipPayloadLength,
+		IPv6Address sourceAddress,
+		uint16_t pseudoHeaderChecksum);
 
-	void ByteSwap()
+protected:
+	void OnRxRouterAdvertisement(
+		ICMPv6Packet* packet,
+		uint16_t ipPayloadLength,
+		IPv6Address sourceAddress);
+
+	enum class RouterAdvertisementOption
 	{
-		m_versionTrafficClassFlowLabel = __builtin_bswap32(m_versionTrafficClassFlowLabel);
-		m_payloadLength = __builtin_bswap16(m_payloadLength);
+		SourceLinkLayerAddress = 1,
+		PrefixInformation = 3
+	};
 
-		//addresses always in network byte order for now
-	}
+/*
+	void OnRxEchoRequest(
+		ICMPv6Packet* packet,
+		uint16_t ipPayloadLength,
+		IPv6Address sourceAddress);*/
 
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Accessors for actual packet data
-
-	//for now this returns payload including all extensions
-	uint8_t* Payload()
-	{ return reinterpret_cast<uint8_t*>(this) + sizeof(*this); }
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Data members
-
-	///@brief Always 0x6, traffic class, and flow label
-	uint32_t m_versionTrafficClassFlowLabel;
-
-	///@brief Upper layer + extension length
-	uint16_t m_payloadLength;
-
-	///@brief Upper layer protocol (or extension type)
-	uint8_t m_nextHeader;
-
-	///@brief Network layer TTL
-	uint8_t m_hopLimit;
-
-	///@brief Origin of the packet
-	IPv6Address m_sourceAddress;
-
-	///@brief Destination of the packet
-	IPv6Address m_destAddress;
-
-	//Options and upper layer protocol data past here
+	///The IPv6 protocol stack
+	IPv6Protocol& m_ipv6;
 };
 
 #endif
