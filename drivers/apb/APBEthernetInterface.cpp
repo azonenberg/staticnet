@@ -189,7 +189,7 @@ void APBEthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 		//(TODO do this in an ISR)
 		if(m_dmaTxFrame)
 		{
-			m_txFreeList.Push(m_dmaTxFrame);
+			m_txFreeList.push_back(m_dmaTxFrame);
 			m_dmaTxFrame = nullptr;
 		}
 		g_ethPacketLen = len;
