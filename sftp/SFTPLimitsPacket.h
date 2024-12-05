@@ -27,35 +27,35 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-#ifndef SFTPVersionPacket_h
-#define SFTPVersionPacket_h
+#ifndef SFTPLimitsPacket_h
+#define SFTPLimitsPacket_h
 
-class __attribute__((packed)) SFTPVersionPacket
+class __attribute__((packed)) SFTPLimitsPacket
 {
 public:
 
-	uint32_t	m_version;
+	uint32_t	m_requestid;
 
-	//Extensions are string pairs of (name, data)
-	//For now, don't advertise support for any extensions
-	uint32_t	m_extension0NameLen;
-	char		m_extension0NameData[18];
-	uint32_t	m_extension0VersionLen;
-	char		m_extension0VersionData;
+	uint64_t	m_maxPacketLength;
+	uint64_t	m_maxReadLength;
+	uint64_t	m_maxWriteLength;
+	uint64_t	m_maxOpenHandles;
 
-	SFTPVersionPacket()
+	SFTPLimitsPacket()
 	{
-		m_extension0NameLen = sizeof(m_extension0NameData);
-		memcpy(m_extension0NameData, "limits@openssh.com", sizeof(m_extension0NameData));
-		m_extension0VersionLen	= sizeof(m_extension0VersionData);
-		m_extension0VersionData = '1';
+		m_maxPacketLength = SSH_RX_BUFFER_SIZE;
+		m_maxReadLength = 1024;
+		m_maxWriteLength = 1024;
+		m_maxOpenHandles = 1;
 	}
 
 	void ByteSwap()
 	{
-		m_version = __builtin_bswap32(m_version);
-		m_extension0NameLen = __builtin_bswap32(m_extension0NameLen);
-		m_extension0VersionLen = __builtin_bswap32(m_extension0VersionLen);
+		m_requestid = __builtin_bswap32(m_requestid);
+		m_maxPacketLength = __builtin_bswap64(m_maxPacketLength);
+		m_maxReadLength = __builtin_bswap64(m_maxReadLength);
+		m_maxWriteLength = __builtin_bswap64(m_maxWriteLength);
+		m_maxOpenHandles = __builtin_bswap64(m_maxOpenHandles);
 	}
 
 

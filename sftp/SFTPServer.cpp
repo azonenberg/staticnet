@@ -35,13 +35,17 @@
 
 #include "SFTPClosePacket.h"
 #include "SFTPDataPacket.h"
+#include "SFTPExtensionPacket.h"
 #include "SFTPFileAttributePacket.h"
 #include "SFTPHandlePacket.h"
 #include "SFTPInitPacket.h"
+#include "SFTPLimitsPacket.h"
 #include "SFTPOpenPacket.h"
 #include "SFTPReadPacket.h"
 #include "SFTPStatPacket.h"
 #include "SFTPVersionPacket.h"
+
+static const char* g_strLimits			= "limits@openssh.com";
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Construction / destruction
@@ -176,6 +180,14 @@ void SFTPServer::OnRxPacket(int id, SFTPConnectionState* state, TCPTableEntry* s
 			}
 			break;
 
+		case SFTPPacket::SSH_FXP_EXTENDED:
+			{
+				auto payload = reinterpret_cast<SFTPExtensionPacket*>(pack->Payload());
+				payload->ByteSwap();
+				OnRxExtension(id, state, socket, payload);
+			}
+			break;
+
 		//Anything else is unsupported
 		default:
 			{
@@ -286,6 +298,29 @@ void SFTPServer::OnRxClose(
 		SendStatusReply(id, socket, pack->m_requestid, SFTPStatusPacket::SSH_FX_OK);
 	else
 		SendStatusReply(id, socket, pack->m_requestid, SFTPStatusPacket::SSH_FX_FAILURE);
+}
+
+/**
+	@brief Handle a SSH_FXP_EXTENDED packet
+ */
+void SFTPServer::OnRxExtension(
+	int id,
+	[[maybe_unused]] SFTPConnectionState* state,
+	TCPTableEntry* socket,
+	SFTPExtensionPacket* pack)
+{
+	//Limits request?
+	if(SSHTransportServer::StringMatchWithLength(g_strLimits, pack->GetNameStart(), pack->GetNameLength()))
+	{
+		SFTPLimitsPacket reply;
+		reply.m_requestid = pack->m_requestid;
+		reply.ByteSwap();
+		SendPacket(id, socket, SFTPPacket::SSH_FXP_EXTENDED_REPLY, (uint8_t*)&reply, sizeof(reply));
+	}
+	else
+	{
+		//g_log("Got unrecognized extension request\n");
+	}
 }
 
 /**

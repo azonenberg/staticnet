@@ -93,6 +93,7 @@ class SFTPStatPacket;
 class SFTPOpenPacket;
 class SFTPReadPacket;
 class SFTPClosePacket;
+class SFTPExtensionPacket;
 
 #include "SFTPStatusPacket.h"
 
@@ -133,6 +134,7 @@ protected:
 	void OnRxOpen(int id, SFTPConnectionState* state, TCPTableEntry* socket, SFTPOpenPacket* pack);
 	void OnRxClose(int id, SFTPConnectionState* state, TCPTableEntry* socket, SFTPClosePacket* pack);
 	void OnRxRead(int id, SFTPConnectionState* state, TCPTableEntry* socket, SFTPReadPacket* pack);
+	void OnRxExtension(int id, SFTPConnectionState* state, TCPTableEntry* socket, SFTPExtensionPacket* pack);
 
 	//Filesystem interface APIs
 

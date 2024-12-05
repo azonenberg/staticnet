@@ -27,38 +27,32 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-#ifndef SFTPVersionPacket_h
-#define SFTPVersionPacket_h
+#ifndef SFTPExtensionPacket_h
+#define SFTPExtensionPacket_h
 
-class __attribute__((packed)) SFTPVersionPacket
+class __attribute__((packed)) SFTPExtensionPacket
 {
 public:
 
-	uint32_t	m_version;
-
-	//Extensions are string pairs of (name, data)
-	//For now, don't advertise support for any extensions
-	uint32_t	m_extension0NameLen;
-	char		m_extension0NameData[18];
-	uint32_t	m_extension0VersionLen;
-	char		m_extension0VersionData;
-
-	SFTPVersionPacket()
-	{
-		m_extension0NameLen = sizeof(m_extension0NameData);
-		memcpy(m_extension0NameData, "limits@openssh.com", sizeof(m_extension0NameData));
-		m_extension0VersionLen	= sizeof(m_extension0VersionData);
-		m_extension0VersionData = '1';
-	}
-
 	void ByteSwap()
-	{
-		m_version = __builtin_bswap32(m_version);
-		m_extension0NameLen = __builtin_bswap32(m_extension0NameLen);
-		m_extension0VersionLen = __builtin_bswap32(m_extension0VersionLen);
-	}
+	{ m_requestid = __builtin_bswap32(m_requestid); }
 
+	uint32_t m_requestid;
 
+	uint32_t m_nameLength;
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Field accessors
+
+	///@brief Gets a pointer to the start of the extension name
+	char* GetNameStart()
+	{ return reinterpret_cast<char*>(&m_nameLength) + sizeof(uint32_t); }
+
+	///@brief Gets the length of the extension name
+	uint32_t GetNameLength()
+	{ return __builtin_bswap32(m_nameLength); }
+
+	//TODO: extension specific data
 };
 
 #endif
