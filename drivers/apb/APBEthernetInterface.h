@@ -74,6 +74,7 @@ public:
 	virtual void CancelTxFrame(EthernetFrame* frame) override;
 	virtual EthernetFrame* GetRxFrame() override;
 	virtual void ReleaseRxFrame(EthernetFrame* frame) override;
+	virtual bool IsTxBufferAvailable() override;
 
 	void Init();
 

@@ -91,6 +91,31 @@ SSHTransportServer::SSHTransportServer(TCPProtocol& tcp)
 // Event handlers
 
 /**
+	@brief Called at 10 Hz to handle various aging related stuff
+ */
+void SSHTransportServer::OnAgingTick10x()
+{
+	if(m_sftpServer)
+	{
+		for(size_t i=0; i<SSH_TABLE_SIZE; i++)
+		{
+			if(m_state[i].m_sftpState)
+			{
+				if(m_state[i].m_sftpState->m_packetPendingTxBuffer)
+				{
+					//g_log("OnAgingTick10x: have pending packet waiting on TX buffer\n");
+
+					//Send a dummy 0-byte packet to the SFTP server to make it re-process whatever is at the
+					//head of the queue
+					if(!m_sftpServer->OnRxData(i, m_state[i].m_sftpState, m_state[i].m_socket, nullptr, 0))
+						DropConnection(i, m_state[i].m_socket);
+				}
+			}
+		}
+	}
+}
+
+/**
 	@brief Handles a newly accepted connection
  */
 void SSHTransportServer::OnConnectionAccepted(TCPTableEntry* socket)
@@ -187,8 +212,27 @@ void SSHTransportServer::GracefulDisconnect(int id, TCPTableEntry* socket)
 	//Close our channel (if open)
 	if(m_state[id].m_sessionChannelID != INVALID_CHANNEL)
 	{
+		//Send the CHANNEL_REQUEST with exit code
 		auto segment = m_tcp.GetTxSegment(socket);
 		auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+		reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_REQUEST;
+		auto req = reinterpret_cast<SSHChannelRequestPacket*>(reply->Payload());
+		req->m_clientChannel = m_state[id].m_sessionChannelID;
+		req->m_requestTypeLength = 11;
+		memcpy(req->GetRequestTypeStart(), "exit-status", req->m_requestTypeLength);
+		*req->GetWantReply() = 0;
+		*reinterpret_cast<uint32_t*>(req->Payload()) = 0;
+		uint32_t exitStatusSize =
+			sizeof(SSHChannelRequestPacket) +	//base packet
+			req->m_requestTypeLength +			//exit-status string
+			1 +									//want reply
+			sizeof(uint32_t);					//the status itself
+		req->ByteSwap();
+		SendEncryptedPacket(id, exitStatusSize, segment, reply, socket);
+
+		//Send the CHANNEL_CLOSE request
+		segment = m_tcp.GetTxSegment(socket);
+		reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 		reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_CLOSE;
 		auto stat = reinterpret_cast<SSHChannelStatusPacket*>(reply->Payload());
 		stat->m_clientChannel = m_state[id].m_sessionChannelID;
@@ -224,20 +268,22 @@ void SSHTransportServer::DropConnection(int id, TCPTableEntry* socket)
 /**
 	@brief Helper for sending session data to the client
  */
-void SSHTransportServer::SendSessionData(int id, TCPTableEntry* socket, const char* data, uint16_t length)
+bool SSHTransportServer::SendSessionData(int id, TCPTableEntry* socket, const char* data, uint16_t length)
 {
 	//abort if we dont have a valid session
 	if(m_state[id].m_sessionChannelID == INVALID_CHANNEL)
-		return;
+		return false;
 
-	//max 1K per packet for now
-	if(length > 1024)
-		return;
+	//max 1280 bytes per packet for now
+	//(this is enough to be comfortably below typical 1500 byte MTUs after header overhead)
+	if(length > 1280)
+		return false;
 
 	//Send the data
 	auto segment = m_tcp.GetTxSegment(socket);
 	if(!segment)
-		return;
+		return false;
+
 	auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 	reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_DATA;
 	auto dat = reinterpret_cast<SSHChannelDataPacket*>(reply->Payload());
@@ -246,6 +292,8 @@ void SSHTransportServer::SendSessionData(int id, TCPTableEntry* socket, const ch
 	memcpy(dat->Payload(), data, length);
 	dat->ByteSwap();
 	SendEncryptedPacket(id, sizeof(SSHChannelDataPacket) + length, segment, reply, socket);
+
+	return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

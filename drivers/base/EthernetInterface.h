@@ -57,6 +57,13 @@ public:
 	virtual EthernetFrame* GetTxFrame() =0;
 
 	/**
+		@brief Checks if we have at least one TX frame available
+
+		If this function returns true, the next call to GetTxFrame() is guaranteed not to fail.
+	 */
+	virtual bool IsTxBufferAvailable() =0;
+
+	/**
 		@brief Sends a frame.
 
 		If markFree is true, ownership of the frame memory is immediately transferred to the interface object, which

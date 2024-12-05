@@ -174,10 +174,14 @@ class SSHTransportServer : public TCPServer<SSH_TABLE_SIZE, SSHConnectionState>
 public:
 	SSHTransportServer(TCPProtocol& tcp);
 
+	bool IsTxBufferAvailable()
+	{ return m_tcp.IsTxBufferAvailable(); }
+
 	//Event handlers
 	virtual void OnConnectionAccepted(TCPTableEntry* socket) override;
 	virtual void OnConnectionClosed(TCPTableEntry* socket) override;
 	virtual bool OnRxData(TCPTableEntry* socket, uint8_t* payload, uint16_t payloadLen) override;
+	void OnAgingTick10x();
 
 	void SendEncryptedPacket(
 		int id,
@@ -186,7 +190,7 @@ public:
 		SSHTransportPacket* packet,
 		TCPTableEntry* socket);
 
-	void SendSessionData(int id, TCPTableEntry* socket, const char* data, uint16_t length);
+	bool SendSessionData(int id, TCPTableEntry* socket, const char* data, uint16_t length);
 
 	/**
 		@brief Checks if a null terminated C string is equal to an unterminated string with explicit length

@@ -92,7 +92,7 @@ void TCPProtocol::CancelTxSegment(TCPSegment* segment, TCPTableEntry* state)
 // Handle aging of packets
 
 /**
-	@brief Called at 10x to determine if we need to retransmit anything
+	@brief Called at 10 Hz to determine if we need to retransmit anything
  */
 void TCPProtocol::OnAgingTick10x()
 {

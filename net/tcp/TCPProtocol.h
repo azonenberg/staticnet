@@ -122,13 +122,16 @@ public:
 	TCPProtocol(IPv4Protocol* ipv4);
 	//TODO: IPv6 backend
 
+	bool IsTxBufferAvailable()
+	{ return m_ipv4->IsTxBufferAvailable(); }
+
 	void OnRxPacket(
 		TCPSegment* segment,
 		uint16_t ipPayloadLength,
 		IPv4Address sourceAddress,
 		uint16_t pseudoHeaderChecksum);
 
-	void OnAgingTick10x();
+	virtual void OnAgingTick10x();
 
 	TCPSegment* GetTxSegment(TCPTableEntry* state);
 

@@ -27,130 +27,28 @@
 *                                                                                                                      *
 ***********************************************************************************************************************/
 
-/**
-	@file
-	@brief Declaration of IPv4Protocol
- */
+#ifndef SFTPDataPacket_h
+#define SFTPDataPacket_h
 
-#ifndef IPv4Protocol_h
-#define IPv4Protocol_h
-
-#include <stdint.h>
-#include "IPv4Address.h"
-#include "IPv4Packet.h"
-#include "../IPProtocols.h"
-
-inline bool operator!= (const IPv4Address& a, const IPv4Address& b)
-{ return a.m_word != b.m_word; }
-
-inline bool operator== (const IPv4Address& a, const IPv4Address& b)
-{ return a.m_word == b.m_word; }
-
-/**
-	@brief IPv4 address configuration
- */
-class IPv4Config
+class __attribute__((packed)) SFTPDataPacket
 {
 public:
-	IPv4Address		m_address;
-	IPv4Address		m_netmask;
-	IPv4Address		m_broadcast;	//precomputed to save time
-	IPv4Address		m_gateway;
-};
+	SFTPDataPacket()
+	: m_dataLen(0)
+	{}
 
-class ICMPv4Protocol;
-class TCPProtocol;
-class UDPProtocol;
-
-#define IPV4_PAYLOAD_MTU (ETHERNET_PAYLOAD_MTU - 20)
-
-/**
-	@brief IPv4 protocol driver
- */
-class IPv4Protocol
-{
-public:
-	IPv4Protocol(EthernetProtocol& eth, IPv4Config& config, ARPCache& cache);
-
-	bool IsTxBufferAvailable()
-	{ return m_eth.IsTxBufferAvailable(); }
-
-	IPv4Protocol(const IPv4Protocol& rhs) =delete;
-
-	/**
-		@brief Enables reception of unicast IPv4 packets to addresses other than what we currently have configured
-
-		This is typically needed for DHCP to work.
-	 */
-	void SetAllowUnknownUnicasts(bool allow)
-	{ m_allowUnknownUnicasts = allow; }
-
-	IPv4Packet* GetTxPacket(IPv4Address dest, ipproto_t proto);
-	void SendTxPacket(IPv4Packet* packet, size_t upperLayerLength, bool markFree = true);
-	void ResendTxPacket(IPv4Packet* packet, bool markFree = false);
-
-	///@brief Cancels sending of a packet
-	void CancelTxPacket(IPv4Packet* packet)
-	{ m_eth.CancelTxFrame(reinterpret_cast<EthernetFrame*>(reinterpret_cast<uint8_t*>(packet) - ETHERNET_PAYLOAD_OFFSET)); }
-
-	void OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength);
-
-	void OnLinkUp();
-	void OnLinkDown();
-	void OnAgingTick();
-	void OnAgingTick10x();
-
-	static uint16_t InternetChecksum(uint8_t* data, uint16_t len, uint16_t initial = 0);
-	uint16_t PseudoHeaderChecksum(IPv4Packet* packet, uint16_t length);
-
-	enum AddressType
+	void ByteSwap()
 	{
-		ADDR_BROADCAST,		//packet was for a broadcast address
-		ADDR_MULTICAST,		//packet was for a multicast address
-		ADDR_UNICAST_US,	//packet was for our IP
-		ADDR_UNICAST_OTHER	//packet was for someone else (only valid in promiscuous mode)
-	};
+		m_requestid = __builtin_bswap32(m_requestid);
+		m_dataLen = __builtin_bswap32(m_dataLen);
+	}
 
-	void UseICMPv4(ICMPv4Protocol* icmpv4)
-	{ m_icmpv4 = icmpv4; }
+	uint32_t m_requestid;
+	uint32_t m_dataLen;
 
-	void UseTCP(TCPProtocol* tcp)
-	{ m_tcp = tcp; }
-
-	void UseUDP(UDPProtocol* udp)
-	{ m_udp = udp; }
-
-	AddressType GetAddressType(IPv4Address addr);
-	bool IsLocalSubnet(IPv4Address addr);
-
-	EthernetProtocol* GetEthernet()
-	{ return &m_eth; }
-
-	IPv4Address GetOurAddress()
-	{ return m_config.m_address; }
-
-protected:
-
-	///@brief The Ethernet protocol stack
-	EthernetProtocol& m_eth;
-
-	///@brief Our local IP address configuration
-	IPv4Config& m_config;
-
-	///@brief Cache for storing IP -> MAC associations
-	ARPCache& m_cache;
-
-	///@brief ICMPv4 protocol
-	ICMPv4Protocol* m_icmpv4;
-
-	///@brief TCP protocol
-	TCPProtocol* m_tcp;
-
-	///@brief UDP protocol
-	UDPProtocol* m_udp;
-
-	///@brief True to forward unicasts to unknown addresses to us
-	bool m_allowUnknownUnicasts;
+	uint8_t* GetData()
+	{ return reinterpret_cast<uint8_t*>(&m_dataLen) + sizeof(m_dataLen); }
 };
 
 #endif
+

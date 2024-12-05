@@ -63,6 +63,8 @@ public:
 		m_writeOffset = 0;
 		m_writeBytesSoFar = 0;
 		m_writeLength = 0;
+
+		m_packetPendingTxBuffer = false;
 	};
 
 	///@brief Packet reassembly buffer (may span multiple TCP segments)
@@ -81,11 +83,15 @@ public:
 	uint64_t m_writeOffset;
 	uint32_t m_writeBytesSoFar;
 	uint32_t m_writeLength;
+
+	///@brief True if we have a fully received packet we can't act on due to lack of TX buffer space
+	bool m_packetPendingTxBuffer;
 };
 
 class SFTPInitPacket;
 class SFTPStatPacket;
 class SFTPOpenPacket;
+class SFTPReadPacket;
 class SFTPClosePacket;
 
 #include "SFTPStatusPacket.h"
@@ -126,6 +132,7 @@ protected:
 	void OnRxStat(int id, SFTPConnectionState* state, TCPTableEntry* socket, SFTPStatPacket* pack);
 	void OnRxOpen(int id, SFTPConnectionState* state, TCPTableEntry* socket, SFTPOpenPacket* pack);
 	void OnRxClose(int id, SFTPConnectionState* state, TCPTableEntry* socket, SFTPClosePacket* pack);
+	void OnRxRead(int id, SFTPConnectionState* state, TCPTableEntry* socket, SFTPReadPacket* pack);
 
 	//Filesystem interface APIs
 
@@ -150,12 +157,22 @@ protected:
 	virtual void WriteFile(uint32_t handle, uint64_t offset, const uint8_t* data, uint32_t len) =0;
 
 	/**
+		@brief Reads a chunk of data from an open handle
+	 */
+	virtual uint32_t ReadFile(uint32_t handle, uint64_t offset, uint8_t* data, uint32_t len) =0;
+
+	/**
+		@brief Get the size of a file
+	 */
+	virtual uint64_t GetFileSize(const char* path) =0;
+
+	/**
 		@brief Closes a file
 	 */
 	virtual bool CloseFile(uint32_t handle) =0;
 
 	//Outbound packet generation
-	void SendPacket(int id, TCPTableEntry* socket, SFTPPacket::PacketType type, const uint8_t* data, uint16_t len);
+	bool SendPacket(int id, TCPTableEntry* socket, SFTPPacket::PacketType type, const uint8_t* data, uint16_t len);
 	void SendHandleReply(int id, TCPTableEntry* socket, uint32_t requestid, uint32_t handle);
 	void SendStatusReply(int id, TCPTableEntry* socket, uint32_t requestid, SFTPStatusPacket::Status code);
 

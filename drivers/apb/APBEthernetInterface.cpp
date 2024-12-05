@@ -121,6 +121,14 @@ void APBEthernetInterface::Init()
 #ifdef HAVE_ITCM
 __attribute__((section(".tcmtext")))
 #endif
+bool APBEthernetInterface::IsTxBufferAvailable()
+{
+	return !m_txFreeList.empty();
+}
+
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 EthernetFrame* APBEthernetInterface::GetTxFrame()
 {
 	if(m_txFreeList.empty())

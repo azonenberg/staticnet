@@ -56,6 +56,9 @@ public:
 	char* GetRequestTypeStart()
 	{ return reinterpret_cast<char*>(&m_requestTypeLength) + sizeof(uint32_t); }
 
+	uint8_t* GetWantReply()
+	{ return reinterpret_cast<uint8_t*>(GetRequestTypeStart() + m_requestTypeLength); }
+
 	bool WantReply()
 	{
 		//sanity check on type length

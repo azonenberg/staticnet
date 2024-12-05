@@ -53,6 +53,9 @@ public:
 
 	EthernetProtocol(EthernetInterface& iface, MACAddress our_mac);
 
+	bool IsTxBufferAvailable()
+	{ return m_iface.IsTxBufferAvailable(); }
+
 	EthernetFrame* GetTxFrame(ethertype_t type, const MACAddress& dest);
 
 	///@brief Sends a frame to the driver

@@ -34,9 +34,12 @@
 #include <algorithm>
 
 #include "SFTPClosePacket.h"
+#include "SFTPDataPacket.h"
+#include "SFTPFileAttributePacket.h"
 #include "SFTPHandlePacket.h"
 #include "SFTPInitPacket.h"
 #include "SFTPOpenPacket.h"
+#include "SFTPReadPacket.h"
 #include "SFTPStatPacket.h"
 #include "SFTPVersionPacket.h"
 
@@ -65,6 +68,9 @@ bool SFTPServer::OnRxData(int id, SFTPConnectionState* state, TCPTableEntry* soc
 	if(!state->m_rxBuffer.Push(data, len))
 		return false;
 
+	//Default to nothign pending
+	state->m_packetPendingTxBuffer = false;
+
 	//Huge packets (bigger than our RX buffer) get special processing
 	if(state->m_hugePacketInProgress)
 		OnHugePacketRxData(id, state, socket);
@@ -75,10 +81,26 @@ bool SFTPServer::OnRxData(int id, SFTPConnectionState* state, TCPTableEntry* soc
 		//Pop full packets out of the buffer, byte swap, and process them as they come in
 		while(IsPacketReady(state))
 		{
+			//If there's no space to send a reply, ignore any incoming messages
+			if(!m_ssh->IsTxBufferAvailable())
+			{
+				//g_log("OnRxData no tx buffer 1\n");
+				state->m_packetPendingTxBuffer = true;
+				return true;
+			}
+
 			auto pack = reinterpret_cast<SFTPPacket*>(state->m_rxBuffer.Rewind());
 			pack->ByteSwap();
 			OnRxPacket(id, state, socket, pack);
 			state->m_rxBuffer.Pop(pack->m_length + sizeof(uint32_t));
+		}
+
+		//If there's no space to send a reply, ignore any incoming messages
+		if(!m_ssh->IsTxBufferAvailable())
+		{
+			//g_log("OnRxData no tx buffer 2\n");
+			state->m_packetPendingTxBuffer = true;
+			return true;
 		}
 
 		//If we have an incoming packet with size too big for the buffer, handle that as soon as we get the header
@@ -136,6 +158,14 @@ void SFTPServer::OnRxPacket(int id, SFTPConnectionState* state, TCPTableEntry* s
 			}
 			break;
 
+		case SFTPPacket::SSH_FXP_READ:
+			{
+				auto payload = reinterpret_cast<SFTPReadPacket*>(pack->Payload());
+				payload->ByteSwap();
+				OnRxRead(id, state, socket, payload);
+			}
+			break;
+
 		//TODO: handle non-huge writes!
 
 		//Silently discard fsetstat but pretend it worked
@@ -149,8 +179,7 @@ void SFTPServer::OnRxPacket(int id, SFTPConnectionState* state, TCPTableEntry* s
 		//Anything else is unsupported
 		default:
 			{
-				//g_cliUART.Printf("Got unimplemented/unsupported packet (type %d, len %d)\n",
-				//	pack->m_type, pack->m_length);
+				//g_log("Got unimplemented/unsupported packet (type %d, len %d)\n", pack->m_type, pack->m_length);
 				auto requestid = __builtin_bswap32(*reinterpret_cast<uint32_t*>(pack->Payload()));
 				SendStatusReply(id, socket, requestid, SFTPStatusPacket::SSH_FX_OP_UNSUPPORTED);
 			}
@@ -194,9 +223,15 @@ void SFTPServer::OnRxStat(
 	if(!DoesFileExist(spath))
 		SendStatusReply(id, socket, pack->m_requestid, SFTPStatusPacket::SSH_FX_NO_SUCH_FILE);
 
-	//For now, return OK if the file exists? is that valid?
+	//Return file attributes
 	else
-		SendStatusReply(id, socket, pack->m_requestid, SFTPStatusPacket::SSH_FX_OK);
+	{
+		SFTPFileAttributePacket reply;
+		reply.m_requestid = pack->m_requestid;
+		reply.m_size = GetFileSize(spath);
+		reply.ByteSwap();
+		SendPacket(id, socket, SFTPPacket::SSH_FXP_ATTRS, (uint8_t*)&reply, sizeof(reply));
+	}
 }
 
 /**
@@ -254,6 +289,46 @@ void SFTPServer::OnRxClose(
 }
 
 /**
+	@brief Handle a SSH_FXP_READ packet
+ */
+void SFTPServer::OnRxRead(
+	int id,
+	[[maybe_unused]] SFTPConnectionState* state,
+	TCPTableEntry* socket,
+	SFTPReadPacket* pack)
+{
+	if(pack->m_handleLength != 4)
+		SendStatusReply(id, socket, pack->m_requestid, SFTPStatusPacket::SSH_FX_BAD_MESSAGE);
+
+	//Read file in blocks of up to 1024 bytes
+	//NOTE: client may request larger blocks than we are capable of servicing!
+	//That's OK, we'll just send a shorter reply and the client will send additional read requests,
+	//just like POSIX read(2)
+	const uint32_t maxBlockSize = 1024;
+	uint32_t blockLen = std::min(pack->m_len, maxBlockSize);
+
+	//Fill the TX headers
+	uint8_t txbuf[ETHERNET_PAYLOAD_MTU];
+	auto txpack = reinterpret_cast<SFTPDataPacket*>(&txbuf[0]);
+	txpack->m_requestid = pack->m_requestid;
+
+	//Do the actual read operation
+	blockLen = ReadFile(pack->m_handleValue, pack->m_offset, txpack->GetData(), blockLen);
+
+	//Good data?
+	if(blockLen)
+	{
+		txpack->m_dataLen = blockLen;
+		txpack->ByteSwap();
+		SendPacket(id, socket, SFTPPacket::SSH_FXP_DATA, txbuf, sizeof(SFTPDataPacket) + blockLen);
+	}
+
+	//EOF or error? For now, treat all 0 return values as EOF
+	else
+		SendStatusReply(id, socket, pack->m_requestid, SFTPStatusPacket::SSH_FX_EOF);
+}
+
+/**
 	@brief Send a SSH_FXP_HANDLE packet
  */
 void SFTPServer::SendHandleReply(int id, TCPTableEntry* socket, uint32_t requestid, uint32_t handle)
@@ -274,10 +349,11 @@ void SFTPServer::SendStatusReply(int id, TCPTableEntry* socket, uint32_t request
 	reply.m_requestid = requestid;
 	reply.m_errorCode = code;
 	reply.ByteSwap();
+
 	SendPacket(id, socket, SFTPPacket::SSH_FXP_STATUS, (uint8_t*)&reply, sizeof(reply));
 }
 
-void SFTPServer::SendPacket(
+bool SFTPServer::SendPacket(
 	int id,
 	TCPTableEntry* socket,
 	SFTPPacket::PacketType type,
@@ -286,7 +362,7 @@ void SFTPServer::SendPacket(
 {
 	//Make sure it fits in one frame
 	if(len + sizeof(SFTPPacket) > ETHERNET_PAYLOAD_MTU)
-		return;
+		return false;
 
 	//TODO: can we make this any more efficient?
 	uint8_t reply[ETHERNET_PAYLOAD_MTU];
@@ -297,7 +373,7 @@ void SFTPServer::SendPacket(
 	memcpy(outer->Payload(), data, len);
 
 	//Send the packet with outer framing added
-	m_ssh->SendSessionData(id, socket, (const char*)reply, len + sizeof(SFTPPacket));
+	return m_ssh->SendSessionData(id, socket, (const char*)reply, len + sizeof(SFTPPacket));
 }
 
 void SFTPServer::OnConnectionClosed([[maybe_unused]] int id)
