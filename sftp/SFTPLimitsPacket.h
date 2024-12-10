@@ -30,6 +30,10 @@
 #ifndef SFTPLimitsPacket_h
 #define SFTPLimitsPacket_h
 
+#ifndef SFTP_MAX_REQUESTS
+#define SFTP_MAX_REQUESTS 20
+#endif
+
 class __attribute__((packed)) SFTPLimitsPacket
 {
 public:
@@ -46,7 +50,7 @@ public:
 		m_maxPacketLength = SSH_RX_BUFFER_SIZE;
 		m_maxReadLength = 1024;
 		m_maxWriteLength = 1024;
-		m_maxOpenHandles = 1;
+		m_maxOpenHandles = SFTP_MAX_REQUESTS;
 	}
 
 	void ByteSwap()
