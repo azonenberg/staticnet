@@ -296,6 +296,49 @@ bool SSHTransportServer::SendSessionData(int id, TCPTableEntry* socket, const ch
 	return true;
 }
 
+/**
+	@brief Allocate a packet for replying in a zero-copy fashion
+ */
+SSHTransportPacket* SSHTransportServer::AllocateReply(int id, TCPTableEntry* socket, TCPSegment*& segment)
+{
+	//abort if we dont have a valid session
+	if(m_state[id].m_sessionChannelID == INVALID_CHANNEL)
+		return nullptr;
+
+	segment = m_tcp.GetTxSegment(socket);
+	if(!segment)
+		return nullptr;
+
+	auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+	reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_DATA;
+
+	auto dat = reinterpret_cast<SSHChannelDataPacket*>(reply->Payload());
+	dat->m_clientChannel = m_state[id].m_sessionChannelID;
+
+	return reply;
+}
+
+/**
+	@brief Sends a reply packet allocated by AllocateReply().
+
+	In between, the caller must fill the packet payload in with a valid SSHChannelDataPacket
+ */
+void SSHTransportServer::SendReply(int id, TCPTableEntry* socket, TCPSegment* segment, SSHTransportPacket* pack, uint16_t length)
+{
+	//max 1280 bytes per packet for now
+	//(this is enough to be comfortably below typical 1500 byte MTUs after header overhead)
+	if(length > 1280)
+	{
+		m_tcp.CancelTxSegment(segment, socket);
+		return;
+	}
+
+	auto dat = reinterpret_cast<SSHChannelDataPacket*>(pack->Payload());
+	dat->m_dataLength = length;
+	dat->ByteSwap();
+	SendEncryptedPacket(id, sizeof(SSHChannelDataPacket) + length, segment, pack, socket);
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Handle inbound protocol data
 

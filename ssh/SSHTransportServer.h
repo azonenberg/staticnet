@@ -192,6 +192,9 @@ public:
 
 	bool SendSessionData(int id, TCPTableEntry* socket, const char* data, uint16_t length);
 
+	SSHTransportPacket* AllocateReply(int id, TCPTableEntry* socket, TCPSegment*& segment);
+	void SendReply(int id, TCPTableEntry* socket, TCPSegment* segment, SSHTransportPacket* pack, uint16_t length);
+
 	/**
 		@brief Checks if a null terminated C string is equal to an unterminated string with explicit length
 	 */

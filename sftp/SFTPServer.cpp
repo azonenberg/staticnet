@@ -33,6 +33,8 @@
 
 #include <algorithm>
 
+#include "../ssh/SSHChannelDataPacket.h"
+#include "../ssh/SSHTransportPacket.h"
 #include "SFTPClosePacket.h"
 #include "SFTPDataPacket.h"
 #include "SFTPExtensionPacket.h"
@@ -355,7 +357,30 @@ void SFTPServer::OnRxRead(
 	{
 		txpack->m_dataLen = blockLen;
 		txpack->ByteSwap();
-		SendPacket(id, socket, SFTPPacket::SSH_FXP_DATA, txbuf, sizeof(SFTPDataPacket) + blockLen);
+
+		auto len = sizeof(SFTPDataPacket) + blockLen;
+
+		//Allocate a reply packet
+		//TODO handle failure better?
+		TCPSegment* segment;
+		auto outerlen = len + sizeof(SFTPPacket);
+		auto rpack = m_ssh->AllocateReply(id, socket, segment);
+		if(!rpack)
+			return;
+		auto dat = reinterpret_cast<SSHChannelDataPacket*>(rpack->Payload());
+
+		//TODO: is there any way to avoid this memcpy?
+		//We need txpack->GetData() aligned on a 32-bit boundary so we can do DMA reads, though...
+		//can we somehow waste 3 bytes in the packet that the receiver can deal with?
+		auto reply = dat->Payload();
+		auto outer = reinterpret_cast<SFTPPacket*>(reply);
+		outer->m_length = len + sizeof(SFTPPacket) - sizeof(uint32_t);
+		outer->m_type = SFTPPacket::SSH_FXP_DATA;
+		outer->ByteSwap();
+		memcpy(outer->Payload(), txbuf, len);
+
+		//Send the packet with outer framing added
+		m_ssh->SendReply(id, socket, segment, rpack, outerlen);
 	}
 
 	//EOF or error? For now, treat all 0 return values as EOF
