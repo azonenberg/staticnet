@@ -252,6 +252,9 @@ void STM32CryptoEngine::SHA256_Final(uint8_t* digest)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Encryption
 
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 bool STM32CryptoEngine::DecryptAndVerify(uint8_t* data, uint16_t len)
 {
 	CRYP.CR = 0;
@@ -360,6 +363,9 @@ bool STM32CryptoEngine::DecryptAndVerify(uint8_t* data, uint16_t len)
 	return true;
 }
 
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void STM32CryptoEngine::EncryptAndMAC(uint8_t* data, uint16_t len)
 {
 	//INIT PHASE: set up key

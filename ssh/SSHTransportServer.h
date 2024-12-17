@@ -193,6 +193,10 @@ public:
 	bool SendSessionData(int id, TCPTableEntry* socket, const char* data, uint16_t length);
 
 	SSHTransportPacket* AllocateReply(int id, TCPTableEntry* socket, TCPSegment*& segment);
+
+	void CancelReply(TCPTableEntry* socket, TCPSegment* segment)
+	{ m_tcp.CancelTxSegment(segment, socket); }
+
 	void SendReply(int id, TCPTableEntry* socket, TCPSegment* segment, SSHTransportPacket* pack, uint16_t length);
 
 	/**

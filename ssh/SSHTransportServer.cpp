@@ -142,6 +142,9 @@ void SSHTransportServer::OnConnectionClosed(TCPTableEntry* socket)
 /**
 	@brief Handler for incoming TCP segments
  */
+ #ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 bool SSHTransportServer::OnRxData(TCPTableEntry* socket, uint8_t* payload, uint16_t payloadLen)
 {
 	//Look up the connection ID for the incoming session
@@ -299,6 +302,9 @@ bool SSHTransportServer::SendSessionData(int id, TCPTableEntry* socket, const ch
 /**
 	@brief Allocate a packet for replying in a zero-copy fashion
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 SSHTransportPacket* SSHTransportServer::AllocateReply(int id, TCPTableEntry* socket, TCPSegment*& segment)
 {
 	//abort if we dont have a valid session
@@ -323,6 +329,9 @@ SSHTransportPacket* SSHTransportServer::AllocateReply(int id, TCPTableEntry* soc
 
 	In between, the caller must fill the packet payload in with a valid SSHChannelDataPacket
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void SSHTransportServer::SendReply(int id, TCPTableEntry* socket, TCPSegment* segment, SSHTransportPacket* pack, uint16_t length)
 {
 	//max 1280 bytes per packet for now
