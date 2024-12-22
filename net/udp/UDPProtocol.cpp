@@ -122,8 +122,14 @@ void UDPProtocol::SendTxPacket(UDPPacket* packet, uint16_t sport, uint16_t dport
 
 	//Need to be in network byte order before we send
 	packet->ByteSwap();
-	packet->m_checksum = ~__builtin_bswap16(
-		IPv4Protocol::InternetChecksum(reinterpret_cast<uint8_t*>(packet), length, pseudoHeaderChecksum));
+
+	#ifdef HAVE_UDP_V4_CHECKSUM_OFFLOAD
+		packet->m_checksum = 0xcccc;	//will be filled in by hardware, can put anything here
+										//use invalid value rather than 0 to make sure offload is actually happening
+	#else
+		packet->m_checksum = ~__builtin_bswap16(
+			IPv4Protocol::InternetChecksum(reinterpret_cast<uint8_t*>(packet), length, pseudoHeaderChecksum));*/
+	#endif
 
 	//Actually send it
 	m_ipv4->SendTxPacket(ipack, length, true);
