@@ -115,7 +115,9 @@ void UDPProtocol::SendTxPacket(UDPPacket* packet, uint16_t sport, uint16_t dport
 
 	//Calculate the pseudoheader checksum
 	auto ipack = packet->Parent();
+	#ifndef HAVE_UDP_V4_CHECKSUM_OFFLOAD
 	auto pseudoHeaderChecksum = m_ipv4->PseudoHeaderChecksum(ipack, length);
+	#endif
 
 	//Zeroize the checksum when computing it
 	packet->m_checksum = 0;
@@ -124,8 +126,7 @@ void UDPProtocol::SendTxPacket(UDPPacket* packet, uint16_t sport, uint16_t dport
 	packet->ByteSwap();
 
 	#ifdef HAVE_UDP_V4_CHECKSUM_OFFLOAD
-		packet->m_checksum = 0xcccc;	//will be filled in by hardware, can put anything here
-										//use invalid value rather than 0 to make sure offload is actually happening
+		packet->m_checksum = 0x0000;	//will be filled in by hardware, but don't leave uninitialized
 	#else
 		packet->m_checksum = ~__builtin_bswap16(
 			IPv4Protocol::InternetChecksum(reinterpret_cast<uint8_t*>(packet), length, pseudoHeaderChecksum));*/

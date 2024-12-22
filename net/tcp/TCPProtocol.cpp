@@ -387,7 +387,9 @@ __attribute__((section(".tcmtext")))
 void TCPProtocol::SendSegment(TCPTableEntry* state, TCPSegment* segment, IPv4Packet* packet, uint16_t length)
 {
 	//Calculate the pseudoheader checksum
+	#ifndef HAVE_TCP_V4_CHECKSUM_OFFLOAD
 	auto pseudoHeaderChecksum = m_ipv4->PseudoHeaderChecksum(packet, length);
+	#endif
 
 	//Make an note of what ACK number we just sent
 	if(state)
@@ -395,8 +397,12 @@ void TCPProtocol::SendSegment(TCPTableEntry* state, TCPSegment* segment, IPv4Pac
 
 	//Need to be in network byte order before we send
 	segment->ByteSwap();
-	segment->m_checksum = ~__builtin_bswap16(
-		IPv4Protocol::InternetChecksum(reinterpret_cast<uint8_t*>(segment), length, pseudoHeaderChecksum));
+	#ifdef HAVE_TCP_V4_CHECKSUM_OFFLOAD
+		segment->m_checksum = 0x0000;	//will be filled in by hardware, but don't leave uninitialized
+	#else
+		segment->m_checksum = ~__builtin_bswap16(
+			IPv4Protocol::InternetChecksum(reinterpret_cast<uint8_t*>(segment), length, pseudoHeaderChecksum));
+	#endif
 
 	//Put it in the transmit queue if the frame has content (don't worry about retransmitting ACKs)
 	//Find first free spot in the list of unacked frames
