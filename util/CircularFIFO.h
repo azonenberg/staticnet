@@ -83,10 +83,19 @@ public:
 		if(len > WriteSize())
 			return false;
 
-		//TODO: optimized version using memcpy
-		//(note that we need to handle wraparound)
-		for(uint16_t i=0; i<len; i++)
-			Push(data[i]);
+		//fast path
+		if( (m_writePtr + len) < SIZE)
+		{
+			memcpy(m_data + m_writePtr, data, len);
+			m_writePtr += len;
+		}
+
+		//slow path with wraparound
+		else
+		{
+			for(uint16_t i=0; i<len; i++)
+				Push(data[i]);
+		}
 		return true;
 	}
 
@@ -135,9 +144,17 @@ public:
 		if(size > ReadSize())
 			size = ReadSize();
 
-		//TODO: be efficient
-		for(uint16_t i=0; i<size; i++)
-			Pop();
+		//fast path
+		if( (m_readPtr + size) < SIZE)
+			m_readPtr += size;
+
+		//slow path
+		else
+		{
+			//TODO: optimize more
+			for(uint16_t i=0; i<size; i++)
+				Pop();
+		}
 	}
 
 	/**
