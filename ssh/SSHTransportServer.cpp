@@ -197,7 +197,7 @@ bool SSHTransportServer::OnRxData(TCPTableEntry* socket, uint8_t* payload, uint1
 				break;
 		}
 
-		//Whatever it was, we're done with it. On to th enext one.
+		//Whatever it was, we're done with it. On to the next one.
 		PopPacket(m_state[id]);
 	}
 
