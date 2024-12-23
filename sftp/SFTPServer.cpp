@@ -68,6 +68,9 @@ void SFTPServer::OnConnectionAccepted([[maybe_unused]] int id, SFTPConnectionSta
 /**
 	@brief Handles incoming data on the SSH data stream
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 bool SFTPServer::OnRxData(int id, SFTPConnectionState* state, TCPTableEntry* socket, uint8_t* data, uint16_t len)
 {
 	//Push the data into our RX FIFO

@@ -39,6 +39,9 @@
 
 	Assumes host is little endian.
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void EthernetFrame::ByteSwap()
 {
 	//Swap VLAN tag if present

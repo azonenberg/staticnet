@@ -70,6 +70,9 @@ void EthernetProtocol::OnLinkDown()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Incoming frame processing
 
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void EthernetProtocol::OnRxFrame(EthernetFrame* frame)
 {
 	//Discard anything that's not a broadcast or sent to us
