@@ -162,6 +162,12 @@ protected:
 
 	///@brief Encryption key server to client
 	uint8_t m_keyServerToClient[AES_KEY_SIZE];
+
+	///@brief Byteswapped encryption key server to client
+	uint32_t m_keyServerToClientSwapped[4];
+
+	///@brief Byteswapped encryption key client to server
+	uint32_t m_keyClientToServerSwapped[4];
 };
 
 #endif

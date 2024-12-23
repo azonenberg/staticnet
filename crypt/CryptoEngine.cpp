@@ -60,6 +60,10 @@ void CryptoEngine::Clear()
 	memset(m_ivServerToClient, 0, sizeof(m_ivServerToClient));
 	memset(m_keyClientToServer, 0, sizeof(m_keyClientToServer));
 	memset(m_keyServerToClient, 0, sizeof(m_keyServerToClient));
+
+	memset(m_keyServerToClientSwapped, 0, sizeof(m_keyServerToClientSwapped));
+	memset(m_keyClientToServerSwapped, 0, sizeof(m_keyClientToServerSwapped));
+
 	SHA256_Init();
 }
 
@@ -82,6 +86,16 @@ void CryptoEngine::DeriveSessionKeys(uint8_t* sharedSecret, uint8_t* exchangeHas
 	memcpy(m_keyClientToServer, buf, AES_KEY_SIZE);
 	DeriveSessionKey(sharedSecret, exchangeHash, sessionID, 'D', buf);
 	memcpy(m_keyServerToClient, buf, AES_KEY_SIZE);
+
+	//Precache some byteswapped versions of keys to reduce overhead later
+	m_keyServerToClientSwapped[0] = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyServerToClient[0]));
+	m_keyServerToClientSwapped[1] = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyServerToClient[4]));
+	m_keyServerToClientSwapped[2] = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyServerToClient[8]));
+	m_keyServerToClientSwapped[3] = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyServerToClient[12]));
+	m_keyClientToServerSwapped[0] = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyClientToServer[0]));
+	m_keyClientToServerSwapped[1] = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyClientToServer[4]));
+	m_keyClientToServerSwapped[2] = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyClientToServer[8]));
+	m_keyClientToServerSwapped[3] = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyClientToServer[12]));
 }
 
 /**

@@ -377,10 +377,10 @@ void STM32CryptoEngine::EncryptAndMAC(uint8_t* data, uint16_t len)
 	CRYP.K0RR = 0;
 	CRYP.K1LR = 0;
 	CRYP.K1RR = 0;
-	CRYP.K2LR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyServerToClient[0]));
-	CRYP.K2RR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyServerToClient[4]));
-	CRYP.K3LR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyServerToClient[8]));
-	CRYP.K3RR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyServerToClient[12]));
+	CRYP.K2LR = m_keyServerToClientSwapped[0];
+	CRYP.K2RR = m_keyServerToClientSwapped[1];
+	CRYP.K3LR = m_keyServerToClientSwapped[2];
+	CRYP.K3RR = m_keyServerToClientSwapped[3];
 	CRYP.IV0LR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_ivServerToClient[0]));
 	CRYP.IV0RR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_ivServerToClient[4]));
 	CRYP.IV1LR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_ivServerToClient[8]));
@@ -406,6 +406,9 @@ void STM32CryptoEngine::EncryptAndMAC(uint8_t* data, uint16_t len)
 	CRYP.CR &= ~CRYP_EN;
 	CRYP.CR = (CRYP.CR & ~CRYP_GCM_PHASE_MASK) | CRYP_GCM_PHASE_DATA;
 	CRYP.CR |= CRYP_EN;
+
+	//Use DMA to fill the payload
+
 	for(int i=0; i<len; i += 16)
 	{
 		for(int j=0; j<16; j+= 4)
@@ -424,15 +427,15 @@ void STM32CryptoEngine::EncryptAndMAC(uint8_t* data, uint16_t len)
 	CRYP.CR |= CRYP_GCM_PHASE_TAG;
 	CRYP.CR |= CRYP_EN;
 	#ifdef STM32H7
-	CRYP.DIN = 0;
-	CRYP.DIN = 32;
-	CRYP.DIN = 0;
-	CRYP.DIN = len * 8;
+		CRYP.DIN = 0;
+		CRYP.DIN = 32;
+		CRYP.DIN = 0;
+		CRYP.DIN = len * 8;
 	#elif defined(STM32F7)
-	CRYP.DIN = 0;
-	CRYP.DIN = __builtin_bswap32(32);
-	CRYP.DIN = 0;
-	CRYP.DIN = __builtin_bswap32(len * 8);
+		CRYP.DIN = 0;
+		CRYP.DIN = __builtin_bswap32(32);
+		CRYP.DIN = 0;
+		CRYP.DIN = __builtin_bswap32(len * 8);
 	#endif
 	while( (CRYP.SR & CRYP_OFNE) == 0)
 	{}
