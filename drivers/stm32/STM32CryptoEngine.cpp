@@ -363,9 +363,6 @@ bool STM32CryptoEngine::DecryptAndVerify(uint8_t* data, uint16_t len)
 	return true;
 }
 
-//FIXME
-uint8_t g_tempBuffer[2048];
-
 #ifdef HAVE_ITCM
 __attribute__((section(".tcmtext")))
 #endif
@@ -410,74 +407,49 @@ void STM32CryptoEngine::EncryptAndMAC(uint8_t* data, uint16_t len)
 	CRYP.CR = (CRYP.CR & ~CRYP_GCM_PHASE_MASK) | CRYP_GCM_PHASE_DATA;
 	CRYP.CR |= CRYP_EN;
 
-	/*
-	dmamux1: cryp_in_dma is 76, cryp_out_dma 77
-	*/
+	//Crypto core has two blocks worth of FIFO
+	//This lets us be filling/reading while it's working
+	uint32_t* pin = reinterpret_cast<uint32_t*>(data);
+	uint32_t* pout = reinterpret_cast<uint32_t*>(data);
+	uint32_t* pend = pin + (len / 4);
+	CRYP.DIN = pin[0];
+	CRYP.DIN = pin[1];
+	CRYP.DIN = pin[2];
+	CRYP.DIN = pin[3];
+	pin += 4;
 
-	//TEMP: copy the data somewhere else
-	/*memset(g_tempBuffer, 0, 2048);
-	asm("dmb st");*/
-
-	//Use DMA to write data into the peripheral per table 333
-	/*
-		transfer size = len
-		source burst size = 4
-		dest burst size = 4
-		fifo size = 16
-		source size = 32 bit
-		dest size = 32 bit
-		source inc = 32 bit
-		dest inc = no
-	 */
-	/*RCCHelper::Enable(&DMA1);
-	DMA1.LIFCR = 0xf;	//clear errors
-	DMA1.streams[0].CR =
-		DMA_SCR_MBURST_INCR4 | DMA_SCR_PBURST_INCR4 |
-		DMA_SCR_MSIZE_32 | DMA_SCR_PSIZE_32 |
-		DMA_SCR_DIR_P2M |
-		DMA_SCR_MINC;
-	DMA1.streams[0].NDTR = len / 4;
-	DMA1.streams[0].PAR = &CRYP.DOUT;
-	DMA1.streams[0].M0AR = g_tempBuffer;
-	DMA1.streams[0].FCR = 0x21;
-
-	//read priority should be higher than write priority to avoid deadlock
-
-	//Configure DMAMUX channel 0 to match
-	DMAMUX1.CCR[0] = 77;			//cryp_out_dma
-
-	DMA1.streams[0].CR |= DMA_SCR_EN;
-
-	//Use DMA for output only to start
-	CRYP.DMACR = CRYP_DMACR_DIEN | CRYP_DMACR_DOEN;*/
-
-	for(int i=0; i<len; i += 16)
+	while(pin < pend)
 	{
-		//wait until input fifo empty
-		while( (CRYP.SR & CRYP_IFEM) == 0)
+		//wait until input fifo not full
+		while( (CRYP.SR & CRYP_IFNF) == 0)
 		{}
 
-		for(int j=0; j<16; j+= 4)
-			CRYP.DIN = (*reinterpret_cast<uint32_t*>(data+i+j));
+		//fill input
+		CRYP.DIN = pin[0];
+		CRYP.DIN = pin[1];
+		CRYP.DIN = pin[2];
+		CRYP.DIN = pin[3];
+		pin += 4;
 
+		//read output
 		while( (CRYP.SR & CRYP_OFNE) == 0)
 		{}
 
-		for(int j=0; j<16; j+= 4)
-			*reinterpret_cast<uint32_t*>(data+i+j) = (CRYP.DOUT);
+		//read output
+		pout[0] = CRYP.DOUT;
+		pout[1] = CRYP.DOUT;
+		pout[2] = CRYP.DOUT;
+		pout[3] = CRYP.DOUT;
+		pout += 4;
 	}
 
-	/*
-	//Wait until it's done, then disable DMA
-	while(CRYP.SR & CRYP_BUSY)
+	//read last block of output
+	while( (CRYP.SR & CRYP_OFNE) == 0)
 	{}
-	while(CRYP.SR & CRYP_OFNE)
-	{}
-	CRYP.DMACR = 0;
-	DMA1.streams[0].CR = 0;
-
-	//Copy the output data
-	memcpy(data, g_tempBuffer, len);*/
+	pout[0] = CRYP.DOUT;
+	pout[1] = CRYP.DOUT;
+	pout[2] = CRYP.DOUT;
+	pout[3] = CRYP.DOUT;
 
 	//FINAL PHASE
 	//Last block: block 0/2 = 0, block 1 = AAD len, block 3 = payload len
