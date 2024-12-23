@@ -35,6 +35,10 @@
 #include <stm32.h>
 #include "../../crypt/CryptoEngine.h"
 
+#ifdef HAVE_MDMA
+#include <peripheral/MDMA.h>
+#endif
+
 /**
 	@brief Driver for the STM32 hardware AES / SHA256 / RNG blocks
 
