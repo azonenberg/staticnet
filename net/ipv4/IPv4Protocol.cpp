@@ -149,6 +149,9 @@ bool IPv4Protocol::IsLocalSubnet(IPv4Address addr)
 /**
 	@brief Handle an incoming IPv4 packet
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void IPv4Protocol::OnRxPacket(IPv4Packet* packet, uint16_t ethernetPayloadLength)
 {
 	//Compute the checksum before doing byte swapping, since it expects network byte order
