@@ -723,6 +723,9 @@ void SSHTransportServer::OnRxNewKeys(int id, TCPTableEntry* socket)
 /**
 	@brief Handles an encrypted packet of unknown type (not decrypted or verified yet)
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void SSHTransportServer::OnRxEncryptedPacket(int id, TCPTableEntry* socket)
 {
 	//Grab the packet
