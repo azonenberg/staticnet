@@ -56,9 +56,9 @@ STM32CryptoEngine::STM32CryptoEngine()
 		RNG.CR &= ~RNG_CONDRST;
 
 		//Initialize the RNG
-		uint32_t rng_config1 = 0xF;
+		uint32_t rng_config1 = 0x18;
 		uint32_t rng_config2 = 0;
-		uint32_t rng_config3 = 0xD;
+		uint32_t rng_config3 = 0x0;
 		RNG.CR = (rng_config1 << 20) | (rng_config2 << 13) | (rng_config3 << 8);
 		RNG.HTCR = 0x17590abc;	//magic unlock value
 		RNG.HTCR = 0x0000aa74;	//health test config value
@@ -90,6 +90,9 @@ void STM32CryptoEngine::Clear()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // RNG
 
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void STM32CryptoEngine::GenerateRandom(uint8_t* buf, size_t len)
 {
 	for(size_t i=0; i<len; i+=4)
@@ -274,10 +277,10 @@ bool STM32CryptoEngine::DecryptAndVerify(uint8_t* data, uint16_t len)
 	CRYP.K0RR = 0;
 	CRYP.K1LR = 0;
 	CRYP.K1RR = 0;
-	CRYP.K2LR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyClientToServer[0]));
-	CRYP.K2RR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyClientToServer[4]));
-	CRYP.K3LR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyClientToServer[8]));
-	CRYP.K3RR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_keyClientToServer[12]));
+	CRYP.K2LR = m_keyClientToServerSwapped[0];
+	CRYP.K2RR = m_keyClientToServerSwapped[1];
+	CRYP.K3LR = m_keyClientToServerSwapped[2];
+	CRYP.K3RR = m_keyClientToServerSwapped[3];
 	CRYP.IV0LR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_ivClientToServer[0]));
 	CRYP.IV0RR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_ivClientToServer[4]));
 	CRYP.IV1LR = __builtin_bswap32(*reinterpret_cast<uint32_t*>(&m_ivClientToServer[8]));
@@ -304,17 +307,51 @@ bool STM32CryptoEngine::DecryptAndVerify(uint8_t* data, uint16_t len)
 	CRYP.CR = (CRYP.CR & ~CRYP_GCM_PHASE_MASK) | CRYP_GCM_PHASE_DATA;
 	CRYP.CR |= CRYP_EN;
 	int reallen = len - GCM_TAG_SIZE;
-	for(int i=0; i<reallen; i += 16)
-	{
-		for(int j=0; j<16; j+= 4)
-			CRYP.DIN = (*reinterpret_cast<uint32_t*>(data+i+j));
 
+	//Crypto core has two blocks worth of FIFO
+	//This lets us be filling/reading while it's working
+	uint32_t* pin = reinterpret_cast<uint32_t*>(data);
+	uint32_t* pout = reinterpret_cast<uint32_t*>(data);
+	uint32_t* pend = pin + (reallen / 4);
+	CRYP.DIN = pin[0];
+	CRYP.DIN = pin[1];
+	CRYP.DIN = pin[2];
+	CRYP.DIN = pin[3];
+	pin += 4;
+
+	while(pin < pend)
+	{
+		//wait until input fifo not full
+		while( (CRYP.SR & CRYP_IFNF) == 0)
+		{}
+
+		//fill input
+		CRYP.DIN = pin[0];
+		CRYP.DIN = pin[1];
+		CRYP.DIN = pin[2];
+		CRYP.DIN = pin[3];
+		pin += 4;
+
+		//read output
 		while( (CRYP.SR & CRYP_OFNE) == 0)
 		{}
 
-		for(int j=0; j<16; j+= 4)
-			*reinterpret_cast<uint32_t*>(data+i+j) = (CRYP.DOUT);
+		//read output
+		pout[0] = CRYP.DOUT;
+		pout[1] = CRYP.DOUT;
+		pout[2] = CRYP.DOUT;
+		pout[3] = CRYP.DOUT;
+		pout += 4;
 	}
+
+	//read last block of output
+	while( (CRYP.SR & CRYP_OFNE) == 0)
+	{}
+	pout[0] = CRYP.DOUT;
+	pout[1] = CRYP.DOUT;
+	pout[2] = CRYP.DOUT;
+	pout[3] = CRYP.DOUT;
+
 
 	//FINAL PHASE
 	//Last block: block 0/2 = 0, block 1 = AAD len, block 3 = payload len
