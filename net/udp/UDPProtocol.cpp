@@ -129,7 +129,7 @@ void UDPProtocol::SendTxPacket(UDPPacket* packet, uint16_t sport, uint16_t dport
 		packet->m_checksum = 0x0000;	//will be filled in by hardware, but don't leave uninitialized
 	#else
 		packet->m_checksum = ~__builtin_bswap16(
-			IPv4Protocol::InternetChecksum(reinterpret_cast<uint8_t*>(packet), length, pseudoHeaderChecksum));*/
+			IPv4Protocol::InternetChecksum(reinterpret_cast<uint8_t*>(packet), length, pseudoHeaderChecksum));
 	#endif
 
 	//Actually send it
