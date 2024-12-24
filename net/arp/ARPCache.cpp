@@ -47,6 +47,9 @@ ARPCache::ARPCache()
 
 	32-bit FNV-1 for now. Simple and good mixing, but uses a bunch of multiplies so might be slow?
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 size_t ARPCache::Hash(IPv4Address ip)
 {
 	size_t hash = FNV_INITIAL;
@@ -62,6 +65,9 @@ size_t ARPCache::Hash(IPv4Address ip)
 /**
 	@brief Checks if the ARP cache contains an entry for a given IP, and looks up the corresponding MAC if so
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 bool ARPCache::Lookup(MACAddress& mac, IPv4Address ip)
 {
 	size_t hash = Hash(ip);

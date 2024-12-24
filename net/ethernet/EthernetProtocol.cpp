@@ -145,6 +145,9 @@ void EthernetProtocol::OnRxFrame(EthernetFrame* frame)
 /**
 	@brief Sets up a new frame
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 EthernetFrame* EthernetProtocol::GetTxFrame(ethertype_t type, const MACAddress& dest)
 {
 	//Allocate a new frame from the transmit driver

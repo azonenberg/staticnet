@@ -451,6 +451,9 @@ void SFTPServer::OnConnectionClosed([[maybe_unused]] int id)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // FIFO helpers
 
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 bool SFTPServer::IsPacketReady(SFTPConnectionState* state)
 {
 	auto& fifo = state->m_rxBuffer;
@@ -470,6 +473,9 @@ bool SFTPServer::IsPacketReady(SFTPConnectionState* state)
 /**
 	@brief Checks if we have the header of a packet too big to fit in our buffer
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 bool SFTPServer::IsHugePacketReady(SFTPConnectionState* state)
 {
 	auto& fifo = state->m_rxBuffer;

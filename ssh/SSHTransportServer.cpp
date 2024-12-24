@@ -1540,6 +1540,9 @@ void SSHTransportServer::SendEncryptedPacket(
 /**
 	@brief Checks if a packet is ready to read, or if it hasn't been fully received yet
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 bool SSHTransportServer::IsPacketReady(SSHConnectionState& state)
 {
 	auto& fifo = state.m_rxBuffer;
@@ -1566,6 +1569,9 @@ bool SSHTransportServer::IsPacketReady(SSHConnectionState& state)
 /**
 	@brief Returns the packet at the head of the RX FIFO without removing it from the buffer
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 SSHTransportPacket* SSHTransportServer::PeekPacket(SSHConnectionState& state)
 {
 	return reinterpret_cast<SSHTransportPacket*>(state.m_rxBuffer.Rewind());
@@ -1574,6 +1580,9 @@ SSHTransportPacket* SSHTransportServer::PeekPacket(SSHConnectionState& state)
 /**
 	@brief Removes the packet at the head of the RX FIFO
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void SSHTransportServer::PopPacket(SSHConnectionState& state)
 {
 	auto& fifo = state.m_rxBuffer;
