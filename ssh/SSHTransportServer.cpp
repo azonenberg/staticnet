@@ -1444,6 +1444,9 @@ void SSHTransportServer::OnRxChannelOpenSession(int id, TCPTableEntry* socket, S
 /**
 	@brief Handles a SSH_MSG_CHANNEL_DATA packet
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void SSHTransportServer::OnRxChannelData(int id, TCPTableEntry* socket, SSHTransportPacket* packet)
 {
 	//Only valid in an authenticated session

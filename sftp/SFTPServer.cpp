@@ -129,6 +129,9 @@ bool SFTPServer::OnRxData(int id, SFTPConnectionState* state, TCPTableEntry* soc
 /**
 	@brief Handles a single SFTP packet
  */
+#ifdef HAVE_ITCM
+__attribute__((section(".tcmtext")))
+#endif
 void SFTPServer::OnRxPacket(int id, SFTPConnectionState* state, TCPTableEntry* socket, SFTPPacket* pack)
 {
 	//See what we got
