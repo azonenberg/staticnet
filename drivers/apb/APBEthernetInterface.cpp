@@ -39,6 +39,7 @@ extern Logger g_log;
 
 #ifdef HAVE_MDMA
 	//New MDMA channel configurations for linked list format
+	//These must be in AXI SRAM not TCM
 	__attribute__((aligned(16))) MDMATransferConfig g_sendCommitFlagDmaConfig;
 	__attribute__((aligned(16))) MDMATransferConfig g_sendPacketDataDmaConfig;
 
@@ -111,6 +112,7 @@ void APBEthernetInterface::Init()
 		g_sendCommitFlagDmaConfig.SetSourcePointer(&m_commitFlag);
 		g_sendCommitFlagDmaConfig.SetDestPointer(&m_txBuf->tx_commit);
 		g_sendCommitFlagDmaConfig.AppendTransfer(nullptr);
+		CleanDataCache(&g_sendCommitFlagDmaConfig, sizeof(g_sendCommitFlagDmaConfig));
 
 	#endif
 }
@@ -159,6 +161,10 @@ void APBEthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 	uint32_t wordlen = len / 4;
 	if(len % 4)
 		wordlen ++;
+
+	//Flush any cache lines containing the frame
+	//This shouldn't be needed as everything is in DTCM (uncached)
+	//CleanDataCache(frame->RawData(), len);
 
 	#ifdef QSPI_CACHE_WORKAROUND
 
@@ -213,6 +219,9 @@ void APBEthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 		g_sendPacketDataDmaConfig.SetTransferBlockConfig(4, wordlen);
 		g_sendPacketDataDmaConfig.SetSourcePointer(frame->RawData());
 		g_sendPacketDataDmaConfig.SetDestPointer(&m_txBuf->tx_buf[0]);
+
+		//Flush cache on the DMA configuration (which lives in AXI SRAM)
+		CleanDataCache(&g_sendPacketDataDmaConfig, sizeof(g_sendPacketDataDmaConfig));
 
 		//Chain is constructed, start the DMA
 		m_dmaChannel->Start();
