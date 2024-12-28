@@ -172,14 +172,13 @@ void APBEthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 		m_txBuf->tx_len = len;
 
 		//Force 32 bit copies to the tx_word register to avoid weirdness
-		uint8_t* src = frame->RawData();
+		//but we have to read in 16-bit blocks
+		uint16_t* src = reinterpret_cast<uint16_t*>(frame->RawData());
 		for(uint32_t i=0; i<wordlen; i++)
 		{
-			uint8_t* p = src + i*4;
+			uint16_t* p = src + i*2;
 			uint32_t tmp =
-				(p[3] << 24) |
-				(p[2] << 16) |
-				(p[1] << 8) |
+				(p[1] << 16) |
 				(p[0] << 0);
 
 			m_txBuf->tx_word = tmp;
@@ -192,7 +191,6 @@ void APBEthernetInterface::SendTxFrame(EthernetFrame* frame, bool markFree)
 		//Done, put on free list
 		if(markFree)
 			m_txFreeList.push_back(frame);
-
 
 	#elif defined( HAVE_MDMA )
 
