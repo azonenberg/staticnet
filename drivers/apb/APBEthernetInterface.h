@@ -103,7 +103,7 @@ protected:
 		MDMAChannel* m_dmaChannel;
 
 		///@brief Commit flag (always 1 but has to live in TCM)
-		uint32_t m_commitFlag;
+		uint32_t m_commitFlag[2];
 
 		//The frame currently being sent by DMA
 		EthernetFrame* m_dmaTxFrame;
