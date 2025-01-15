@@ -2,7 +2,7 @@
 *                                                                                                                      *
 * staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
+* Copyright (c) 2021-2025 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -217,6 +217,11 @@ void SSHTransportServer::GracefulDisconnect(int id, TCPTableEntry* socket)
 	{
 		//Send the CHANNEL_REQUEST with exit code
 		auto segment = m_tcp.GetTxSegment(socket);
+		if(!segment)
+		{
+			m_state[id].m_sessionChannelID = INVALID_CHANNEL;
+			return;
+		}
 		auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 		reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_REQUEST;
 		auto req = reinterpret_cast<SSHChannelRequestPacket*>(reply->Payload());
@@ -235,6 +240,11 @@ void SSHTransportServer::GracefulDisconnect(int id, TCPTableEntry* socket)
 
 		//Send the CHANNEL_CLOSE request
 		segment = m_tcp.GetTxSegment(socket);
+		if(!segment)
+		{
+			m_state[id].m_sessionChannelID = INVALID_CHANNEL;
+			return;
+		}
 		reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 		reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_CLOSE;
 		auto stat = reinterpret_cast<SSHChannelStatusPacket*>(reply->Payload());
@@ -255,14 +265,17 @@ void SSHTransportServer::GracefulDisconnect(int id, TCPTableEntry* socket)
 void SSHTransportServer::DropConnection(int id, TCPTableEntry* socket)
 {
 	auto segment = m_tcp.GetTxSegment(socket);
-	auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
-	reply->m_type = SSHTransportPacket::SSH_MSG_DISCONNECT;
-	auto disc = reinterpret_cast<SSHDisconnectPacket*>(reply->Payload());
-	disc->m_reasonCode = SSHDisconnectPacket::SSH_DISCONNECT_BY_APPLICATION;
-	disc->m_descriptionLengthAlwaysZero = 0;
-	disc->m_languageTagAlwaysZero = 0;
-	disc->ByteSwap();
-	SendEncryptedPacket(id, sizeof(SSHDisconnectPacket), segment, reply, socket);
+	if(segment)
+	{
+		auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
+		reply->m_type = SSHTransportPacket::SSH_MSG_DISCONNECT;
+		auto disc = reinterpret_cast<SSHDisconnectPacket*>(reply->Payload());
+		disc->m_reasonCode = SSHDisconnectPacket::SSH_DISCONNECT_BY_APPLICATION;
+		disc->m_descriptionLengthAlwaysZero = 0;
+		disc->m_languageTagAlwaysZero = 0;
+		disc->ByteSwap();
+		SendEncryptedPacket(id, sizeof(SSHDisconnectPacket), segment, reply, socket);
+	}
 
 	m_state[id].Clear();
 	m_tcp.CloseSocket(socket);
@@ -395,6 +408,11 @@ void SSHTransportServer::OnRxBanner(int id, TCPTableEntry* socket)
 	//Send our banner to the client
 	static const char server_banner[] = "SSH-2.0-staticnet_0.1\r\n";
 	auto segment = m_tcp.GetTxSegment(socket);
+	if(!segment)
+	{
+		DropConnection(id, socket);
+		return;
+	}
 	auto payload = segment->Payload();
 	strncpy((char*)payload, server_banner, TCP_IPV4_PAYLOAD_MTU);
 	m_tcp.SendTxSegment(socket, segment, sizeof(server_banner)-1);
@@ -455,6 +473,11 @@ void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 
 	//Prepare to reply with a key exchange init packet
 	auto segment = m_tcp.GetTxSegment(socket);
+	if(!segment)
+	{
+		DropConnection(id, socket);
+		return;
+	}
 	auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 	packet->m_type = SSHTransportPacket::SSH_MSG_KEXINIT;
 
@@ -613,6 +636,11 @@ void SSHTransportServer::OnRxKexEcdhInit(int id, TCPTableEntry* socket)
 
 	//Prepare to reply with a key exchange reply packet
 	auto segment = m_tcp.GetTxSegment(socket);
+	if(!segment)
+	{
+		DropConnection(id, socket);
+		return;
+	}
 	auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 	packet->m_type = SSHTransportPacket::SSH_MSG_KEX_ECDH_REPLY;
 	auto replyStart = packet->Payload();
@@ -706,6 +734,11 @@ void SSHTransportServer::OnRxNewKeys(int id, TCPTableEntry* socket)
 
 	//Send a canned reply
 	auto segment = m_tcp.GetTxSegment(socket);
+	if(!segment)
+	{
+		DropConnection(id, socket);
+		return;
+	}
 	auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 	packet->m_type = SSHTransportPacket::SSH_MSG_NEWKEYS;
 
@@ -847,6 +880,11 @@ void SSHTransportServer::OnRxServiceRequestUserAuth(int id, TCPTableEntry* socke
 {
 	//Send the acceptance reply
 	auto segment = m_tcp.GetTxSegment(socket);
+	if(!segment)
+	{
+		DropConnection(id, socket);
+		return;
+	}
 	auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 	packet->m_type = SSHTransportPacket::SSH_MSG_SERVICE_ACCEPT;
 	auto accept = reinterpret_cast<SSHServiceRequestPacket*>(packet->Payload());
@@ -946,6 +984,11 @@ void SSHTransportServer::OnRxAuthSuccess(int id, const char* username, int16_t u
 	strncpy(m_state[id].m_username, username, usernamelen);
 
 	auto segment = m_tcp.GetTxSegment(socket);
+	if(!segment)
+	{
+		DropConnection(id, socket);
+		return;
+	}
 	auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 	packet->m_type = SSHTransportPacket::SSH_MSG_USERAUTH_SUCCESS;
 	SendEncryptedPacket(id, 0, segment, packet, socket);
@@ -957,6 +1000,11 @@ void SSHTransportServer::OnRxAuthSuccess(int id, const char* username, int16_t u
 void SSHTransportServer::OnRxAuthFail(int id, TCPTableEntry* socket)
 {
 	auto segment = m_tcp.GetTxSegment(socket);
+	if(!segment)
+	{
+		DropConnection(id, socket);
+		return;
+	}
 	auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 	packet->m_type = SSHTransportPacket::SSH_MSG_USERAUTH_FAILURE;
 	auto buf = packet->Payload();
@@ -1228,6 +1276,11 @@ void SSHTransportServer::OnRxAuthTypePubkey(int id, TCPTableEntry* socket, SSHUs
 		//Report that this key is good
 		keyblob->ByteSwap();
 		auto segment = m_tcp.GetTxSegment(socket);
+		if(!segment)
+		{
+			DropConnection(id, socket);
+			return;
+		}
 		auto packet = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 		packet->m_type = SSHTransportPacket::SSH_MSG_USERAUTH_PK_OK;
 		auto buf = packet->Payload();
@@ -1274,6 +1327,11 @@ void SSHTransportServer::OnRxChannelOpen(int id, TCPTableEntry* socket, SSHTrans
 	else
 	{
 		auto segment = m_tcp.GetTxSegment(socket);
+		if(!segment)
+		{
+			DropConnection(id, socket);
+			return;
+		}
 		auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 		reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_OPEN_FAILURE;
 		auto fail = reinterpret_cast<SSHChannelOpenFailurePacket*>(reply->Payload());
@@ -1430,6 +1488,11 @@ void SSHTransportServer::OnRxChannelOpenSession(int id, TCPTableEntry* socket, S
 
 	//Send the reply confirming we opened it
 	auto segment = m_tcp.GetTxSegment(socket);
+	if(!segment)
+	{
+		DropConnection(id, socket);
+		return;
+	}
 	auto reply = reinterpret_cast<SSHTransportPacket*>(segment->Payload());
 	reply->m_type = SSHTransportPacket::SSH_MSG_CHANNEL_OPEN_CONFIRMATION;
 	auto confirm = reinterpret_cast<SSHChannelOpenConfirmationPacket*>(reply->Payload());
