@@ -2,7 +2,7 @@
 *                                                                                                                      *
 * staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
+* Copyright (c) 2021-2025 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -318,6 +318,7 @@ EthernetFrame* APBEthernetInterface::GetRxFrame()
 	if(len > 1500)
 	{
 		g_log(Logger::ERROR, "Got a %d byte long frame (max size 1500, FPGA should not have done this)\n", (int)len);
+		m_rxBuf->rx_pop = 1;
 		return nullptr;
 	}
 	if(len == 0)
