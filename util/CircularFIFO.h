@@ -161,9 +161,9 @@ public:
 		@brief Rotates the buffer such that the read pointer is now at zero and returns a pointer to the data
 	 */
 	__attribute__((noinline))
-	#ifdef HAVE_ITCM
-	__attribute__((section(".tcmtext")))
-	#endif
+	//#ifdef HAVE_ITCM
+	//__attribute__((section(".tcmtext")))
+	//#endif
 	uint8_t* Rewind()
 	{
 		//Figure out how many spaces we need to rewind the buffer by
