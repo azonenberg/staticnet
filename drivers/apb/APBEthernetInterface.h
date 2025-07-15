@@ -2,7 +2,7 @@
 *                                                                                                                      *
 * staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
+* Copyright (c) 2021-2025 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -77,6 +77,17 @@ public:
 	virtual bool IsTxBufferAvailable() override;
 
 	void Init();
+
+	/**
+		@brief Switch this driver to use a different Ethernet TX/RX buffer
+
+		Most commonly used for dual 1/10G stacks
+	 */
+	void SwapInterfaces(volatile APB_EthernetRxBuffer* rxbuf, volatile APB_EthernetTxBuffer_10G* txbuf)
+	{
+		m_rxBuf = rxbuf;
+		m_txBuf = txbuf;
+	}
 
 protected:
 

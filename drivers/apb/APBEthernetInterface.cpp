@@ -349,7 +349,6 @@ EthernetFrame* APBEthernetInterface::GetRxFrame()
 		padlen = (padlen | 3) + 1;
 	memcpy(frame->RawData(), (void*)&m_rxBuf->rx_buf, padlen);
 	m_rxBuf->rx_pop = 1;
-
 	return frame;
 }
 
