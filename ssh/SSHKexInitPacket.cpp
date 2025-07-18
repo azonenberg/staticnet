@@ -2,7 +2,7 @@
 *                                                                                                                      *
 * staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
+* Copyright (c) 2021-2025 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -51,14 +51,20 @@ uint32_t SSHKexInitPacket::GetNameListLength(uint8_t* start)
  */
 char* SSHKexInitPacket::GetNameListData(uint8_t* start)
 {
+	if(!start)
+		return nullptr;
 	return reinterpret_cast<char*>(start + sizeof(uint32_t));
 }
 
 /**
 	@brief Gets the start of the next name list, given a pointer to the start of this one
  */
-uint8_t* SSHKexInitPacket::GetNextNameListStart(uint8_t* start)
+uint8_t* SSHKexInitPacket::GetNextNameListStart(uint8_t* start, uint8_t* end)
 {
+	if(start == nullptr)
+		return nullptr;
+	if(start + 4 >= end)
+		return nullptr;
 	return start + sizeof(uint32_t) + GetNameListLength(start);
 }
 
@@ -67,13 +73,23 @@ uint8_t* SSHKexInitPacket::GetNextNameListStart(uint8_t* start)
  */
 bool SSHKexInitPacket::NameListContains(uint8_t* start, const char* search, uint16_t end)
 {
+	if(start == nullptr)
+		return false;
+
 	auto len = GetNameListLength(start);
+	if(len > end)
+		return false;
 	auto data = GetNameListData(start);
+	if(data == nullptr)
+		return false;
 
 	//Check each substring in the name list for a match
 	uint32_t targetlen = strlen(search);
+	if(targetlen > len)
+		return false;
 	uint32_t pos = 0;
-	while(pos < (len - targetlen))
+	uint32_t endpos = len - targetlen;
+	while(pos < endpos)
 	{
 		//Bounds check
 		if( ((data+pos) - reinterpret_cast<char*>(this)) > end)

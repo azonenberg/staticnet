@@ -2,7 +2,7 @@
 *                                                                                                                      *
 * staticnet                                                                                                            *
 *                                                                                                                      *
-* Copyright (c) 2021-2024 Andrew D. Zonenberg and contributors                                                         *
+* Copyright (c) 2021-2025 Andrew D. Zonenberg and contributors                                                         *
 * All rights reserved.                                                                                                 *
 *                                                                                                                      *
 * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the     *
@@ -84,6 +84,10 @@ public:
 	uint8_t* Payload()
 	{ return reinterpret_cast<uint8_t*>(this) + sizeof(SSHTransportPacket); }
 
+	///@brief Validate that a given offset in the payload lies within the bounds of the packet
+	bool ValidateOffset(uint32_t offset)
+	{ return offset + sizeof(SSHTransportPacket) < m_packetLength; }
+
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Byte ordering correction
 
@@ -93,10 +97,10 @@ public:
 	// Data fields
 
 	uint32_t m_packetLength;	//does not include the length field itself!
-	uint8_t m_paddingLength;
+	uint8_t m_paddingLength;	//encrypted from here on out
 	uint8_t m_type;
 
-	//After packet:
+	//After packet (if encrypted):
 	//uint8_t padding[]
 	//uint8_t mac[32]
 };

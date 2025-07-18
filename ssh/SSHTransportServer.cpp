@@ -399,6 +399,11 @@ void SSHTransportServer::OnRxBanner(int id, TCPTableEntry* socket)
 
 	//Version should be "SSH-2.0-clientswversion(optional other stuff)\r\n"
 	//If it's not a SSH2 client, give up
+	if(bannerLen < 7)
+	{
+		DropConnection(id, socket);
+		return;
+	}
 	if(memcmp(banner, "SSH-2.0", 7) != 0)
 	{
 		DropConnection(id, socket);
@@ -454,7 +459,7 @@ void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 	//Hash the client key exchange packet.
 	//Note that padding and the type field are not included in the hash.
 	uint32_t lenUnpadded = pack->m_packetLength - (pack->m_paddingLength + 1);
-	if(lenUnpadded > pack->m_packetLength)
+	if(lenUnpadded > SSH_RX_BUFFER_SIZE)
 	{
 		DropConnection(id, socket);
 		return;
@@ -491,36 +496,37 @@ void SSHTransportServer::OnRxKexInit(int id, TCPTableEntry* socket)
 	kexOut->SetNameList(offset, g_sshKexAlg);
 
 	//Host key alg
-	offset = kexOut->GetNextNameListStart(offset);
+	uint8_t* pend = &kexInit->m_cookie[0] + lenUnpadded;
+	offset = kexOut->GetNextNameListStart(offset, pend);
 	kexOut->SetNameList(offset, g_sshHostKeyAlg);
 
 	//Encryption algorithms (client to server, then server to client)
-	offset = kexOut->GetNextNameListStart(offset);
+	offset = kexOut->GetNextNameListStart(offset, pend);
 	kexOut->SetNameList(offset, g_sshEncryptionAlg);
-	offset = kexOut->GetNextNameListStart(offset);
+	offset = kexOut->GetNextNameListStart(offset, pend);
 	kexOut->SetNameList(offset, g_sshEncryptionAlg);
 
 	//MAC algorithms (client to server, then server to client)
-	offset = kexOut->GetNextNameListStart(offset);
+	offset = kexOut->GetNextNameListStart(offset, pend);
 	kexOut->SetNameList(offset, g_sshMacAlg);
-	offset = kexOut->GetNextNameListStart(offset);
+	offset = kexOut->GetNextNameListStart(offset, pend);
 	kexOut->SetNameList(offset, g_sshMacAlg);
 
 	//Compression algorithms (client to server, then server to client)
-	offset = kexOut->GetNextNameListStart(offset);
+	offset = kexOut->GetNextNameListStart(offset, pend);
 	kexOut->SetNameList(offset, g_sshCompressionAlg);
-	offset = kexOut->GetNextNameListStart(offset);
+	offset = kexOut->GetNextNameListStart(offset, pend);
 	kexOut->SetNameList(offset, g_sshCompressionAlg);
 
 	//Languages (client to server, then server to client)
-	offset = kexOut->GetNextNameListStart(offset);
+	offset = kexOut->GetNextNameListStart(offset, pend);
 	kexOut->SetNameList(offset, "");
-	offset = kexOut->GetNextNameListStart(offset);
+	offset = kexOut->GetNextNameListStart(offset, pend);
 	kexOut->SetNameList(offset, "");
 
 	//Done with name lists
 	//Add first_kext_packet_follows
-	offset = kexOut->GetNextNameListStart(offset);
+	offset = kexOut->GetNextNameListStart(offset, pend);
 	*offset = 0;
 	offset ++;
 
@@ -557,48 +563,51 @@ bool SSHTransportServer::ValidateKexInit(SSHKexInitPacket* kex, uint16_t len)
 		return false;
 
 	//Server host key algorithms
-	offset = kex->GetNextNameListStart(offset);
+	uint8_t* pend = &kex->m_cookie[0] + len;
+	offset = kex->GetNextNameListStart(offset, pend);
 	if(!kex->NameListContains(offset, g_sshHostKeyAlg, len))
 		return false;
 
 	//Encryption algorithms (client to server)
-	offset = kex->GetNextNameListStart(offset);
+	offset = kex->GetNextNameListStart(offset, pend);
 	if(!kex->NameListContains(offset, g_sshEncryptionAlg, len))
 		return false;
 
 	//Encryption algorithms (server to client)
-	offset = kex->GetNextNameListStart(offset);
+	offset = kex->GetNextNameListStart(offset, pend);
 	if(!kex->NameListContains(offset, g_sshEncryptionAlg, len))
 		return false;
 
 	//MAC algorithms (client to server)
 	//Ignore this, AEAD modes don't use a MAC (client may not actually advertise "none")
-	offset = kex->GetNextNameListStart(offset);
+	offset = kex->GetNextNameListStart(offset, pend);
 
 	//MAC algorithms (server to client)
 	//Ignore this, AEAD modes don't use a MAC (client may not actually advertise "none")
-	offset = kex->GetNextNameListStart(offset);
+	offset = kex->GetNextNameListStart(offset, pend);
 
 	//Compression algorithms (client to server)
-	offset = kex->GetNextNameListStart(offset);
+	offset = kex->GetNextNameListStart(offset, pend);
 	if(!kex->NameListContains(offset, g_sshCompressionAlg, len))
 		return false;
 
 	//Compression algorithms (server to client)
-	offset = kex->GetNextNameListStart(offset);
+	offset = kex->GetNextNameListStart(offset, pend);
 	if(!kex->NameListContains(offset, g_sshCompressionAlg, len))
 		return false;
 
 	//Languages (client to server)
 	//Ignore this, we don't support any language extensions
-	offset = kex->GetNextNameListStart(offset);
+	offset = kex->GetNextNameListStart(offset, pend);
 
 	//Languages (server to client)
 	//Ignore this, we don't support any language extensions
-	offset = kex->GetNextNameListStart(offset);
+	offset = kex->GetNextNameListStart(offset, pend);
 
 	//first kex packet follows (not supported)
-	offset = kex->GetNextNameListStart(offset);
+	offset = kex->GetNextNameListStart(offset, pend);
+	if(offset == nullptr)
+		return false;
 	if( (offset-first) > len)
 		return false;
 	bool firstKexFollows = *offset;
@@ -767,6 +776,11 @@ void SSHTransportServer::OnRxEncryptedPacket(int id, TCPTableEntry* socket)
 
 	//Need to decrypt the entire packet including type field and padding length before doing anything else
 	//If verification failure, drop the connection and exit
+	if(pack->m_packetLength > (SSH_RX_BUFFER_SIZE - GCM_TAG_SIZE - 4))
+	{
+		DropConnection(id, socket);
+		return;
+	}
 	if(!m_state[id].m_crypto->DecryptAndVerify(&pack->m_paddingLength, pack->m_packetLength + GCM_TAG_SIZE))
 	{
 		DropConnection(id, socket);
@@ -909,13 +923,11 @@ void SSHTransportServer::OnRxUserAuthRequest(int id, TCPTableEntry* socket, SSHT
 		return;
 	}
 
-	const int string_max = 1024;
-
 	//Grab initial string fields out of the packet
 	//Cap string length to be safe
 	auto req = reinterpret_cast<SSHUserAuthRequestPacket*>(packet->Payload());
 	auto ulen = req->GetUserNameLength();
-	if(ulen > string_max)
+	if(ulen > (packet->m_packetLength - 4))
 	{
 		DropConnection(id, socket);
 		return;
@@ -923,7 +935,7 @@ void SSHTransportServer::OnRxUserAuthRequest(int id, TCPTableEntry* socket, SSHT
 	auto sname = req->GetServiceNameStart();
 	auto slen = req->GetServiceNameLength();
 	auto total = ulen + slen;
-	if(total > string_max)
+	if(total > (packet->m_packetLength - 4))
 	{
 		DropConnection(id, socket);
 		return;
@@ -931,7 +943,7 @@ void SSHTransportServer::OnRxUserAuthRequest(int id, TCPTableEntry* socket, SSHT
 	auto authtype = req->GetAuthTypeStart();
 	auto authlen = req->GetAuthTypeLength();
 	total += authlen;
-	if(total > string_max)
+	if(total > packet->m_packetLength)
 	{
 		DropConnection(id, socket);
 		return;
@@ -954,14 +966,14 @@ void SSHTransportServer::OnRxUserAuthRequest(int id, TCPTableEntry* socket, SSHT
 	//Trying to authenticate with a password
 	else if(StringMatchWithLength(g_strAuthMethodPassword, authtype, authlen))
 	{
-		OnRxAuthTypePassword(id, socket, req);
+		OnRxAuthTypePassword(id, socket, req, packet);
 		return;
 	}
 
 	//Trying to authenticate with a public key
 	else if(StringMatchWithLength(g_strAuthMethodPubkey, authtype, authlen))
 	{
-		OnRxAuthTypePubkey(id, socket, req);
+		OnRxAuthTypePubkey(id, socket, req, packet);
 		return;
 	}
 
@@ -1030,30 +1042,35 @@ void SSHTransportServer::OnRxAuthTypeQuery(int id, TCPTableEntry* socket)
 /**
 	@brief Handles a SSH_MSG_USERAUTH_REQUEST with type "password"
  */
-void SSHTransportServer::OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSHUserAuthRequestPacket* req)
+void SSHTransportServer::OnRxAuthTypePassword(
+	int id,
+	TCPTableEntry* socket,
+	SSHUserAuthRequestPacket* req,
+	SSHTransportPacket* tpack)
 {
+	//If we don't have a matching authenticator, reject the auth request and don't even waste time parsing it
+	if(!m_passwordAuth)
+	{
+		//printf("rejecting auth due to no password authenticator\n");
+		OnRxAuthFail(id, socket);
+		//no change to state, still waiting for auth to complete
+		return;
+	}
+
 	//Extract username and password, and sanity check lengths
+	char* pend = reinterpret_cast<char*>(tpack->Payload()) + tpack->m_packetLength;
 	auto uname = req->GetUserNameStart();
 	auto ulen = req->GetUserNameLength();
-	if(ulen >= SSH_MAX_USERNAME)
+	if( (ulen >= SSH_MAX_USERNAME) || ( (uname + ulen) > pend) )
 	{
 		DropConnection(id, socket);
 		return;
 	}
 	auto pass = req->GetPasswordStart();
 	auto passlen = req->GetPasswordLength();
-	if(passlen >= SSH_MAX_PASSWORD)
+	if( (passlen >= SSH_MAX_PASSWORD) || ( (pass + passlen) > pend) )
 	{
 		DropConnection(id, socket);
-		return;
-	}
-
-	//If we don't have an authenticator, reject the auth request
-	if(!m_passwordAuth)
-	{
-		//printf("rejecting auth due to no password authenticator\n");
-		OnRxAuthFail(id, socket);
-		//no change to state, still waiting for auth to complete
 		return;
 	}
 
@@ -1079,10 +1096,12 @@ void SSHTransportServer::OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSH
 /**
 	@brief Handles a SSH_MSG_USERAUTH_REQUEST with type "publickey"
  */
-void SSHTransportServer::OnRxAuthTypePubkey(int id, TCPTableEntry* socket, SSHUserAuthRequestPacket* req)
+void SSHTransportServer::OnRxAuthTypePubkey(
+	int id,
+	TCPTableEntry* socket,
+	SSHUserAuthRequestPacket* req,
+	SSHTransportPacket* tpack)
 {
-	const uint32_t nomalglen = 11;
-
 	//If we don't have an authenticator, reject the auth request
 	if(m_pubkeyAuth == nullptr)
 	{
@@ -1091,10 +1110,13 @@ void SSHTransportServer::OnRxAuthTypePubkey(int id, TCPTableEntry* socket, SSHUs
 		return;
 	}
 
+	const uint32_t nomalglen = 11;
+
 	//Extract username, and sanity check lengths
+	char* pend = reinterpret_cast<char*>(tpack->Payload()) + tpack->m_packetLength;
 	auto uname = req->GetUserNameStart();
 	auto ulen = req->GetUserNameLength();
-	if(ulen >= SSH_MAX_USERNAME)
+	if( (ulen >= SSH_MAX_USERNAME) || ( (uname + ulen) > pend) )
 	{
 		OnRxAuthFail(id, socket);
 		return;
@@ -1106,7 +1128,7 @@ void SSHTransportServer::OnRxAuthTypePubkey(int id, TCPTableEntry* socket, SSHUs
 	//Extract the key algorithm
 	auto alg = req->GetAlgorithmStart();
 	auto alglen = req->GetAlgorithmLength();
-	if(alglen >= SSH_MAX_ALGLEN)
+	if( (alglen >= SSH_MAX_ALGLEN) || ( (alg + alglen) > pend ) )
 	{
 		OnRxAuthFail(id, socket);
 		return;
@@ -1122,7 +1144,7 @@ void SSHTransportServer::OnRxAuthTypePubkey(int id, TCPTableEntry* socket, SSHUs
 	//Extract the key blob itself
 	auto keyblob = reinterpret_cast<SSHCurve25519KeyBlob*>(req->GetKeyBlobStart());
 	auto keylen = req->GetKeyBlobLength();
-	if(keylen > 64)
+	if( (keylen > 64) || ( (reinterpret_cast<char*>(keyblob) + keylen) > pend) )
 	{
 		OnRxAuthFail(id, socket);
 		return;
@@ -1320,6 +1342,11 @@ void SSHTransportServer::OnRxChannelOpen(int id, TCPTableEntry* socket, SSHTrans
 	//Grab the payload and see what type it is
 	auto payload = packet->Payload();
 	auto len = __builtin_bswap32(*reinterpret_cast<uint32_t*>(payload));
+	if(len > packet->m_packetLength)
+	{
+		DropConnection(id, socket);
+		return;
+	}
 	if(StringMatchWithLength(g_strSession, reinterpret_cast<const char*>(payload+sizeof(uint32_t)), len))
 		OnRxChannelOpenSession(id, socket, reinterpret_cast<SSHSessionRequestPacket*>(payload));
 
@@ -1360,8 +1387,17 @@ void SSHTransportServer::OnRxChannelRequest(int id, TCPTableEntry* socket, SSHTr
 
 	//Grab the payload and verify channel ID and request type length
 	auto payload = reinterpret_cast<SSHChannelRequestPacket*>(packet->Payload());
+	char* pend = reinterpret_cast<char*>(packet->Payload() + packet->m_packetLength);
 	payload->ByteSwap();
 	if( (payload->m_clientChannel != m_state[id].m_sessionChannelID) || (payload->m_requestTypeLength > 256) )
+	{
+		DropConnection(id, socket);
+		return;
+	}
+
+	//Sanity check request type
+	auto pstart = payload->GetRequestTypeStart();
+	if( (pstart > pend) || ( (pstart + payload->m_requestTypeLength) > pend) )
 	{
 		DropConnection(id, socket);
 		return;
@@ -1441,7 +1477,7 @@ void SSHTransportServer::OnExecRequest(int id, TCPTableEntry* socket, SSHExecReq
 void SSHTransportServer::OnRxPtyRequest(int id, SSHPtyRequestPacket* packet)
 {
 	//Excessively long type length? ignore rest of the packet
-	int typelen = packet->GetTermTypeLength();
+	uint32_t typelen = packet->GetTermTypeLength();
 	if(typelen > 256)
 		return;
 
@@ -1460,7 +1496,7 @@ void SSHTransportServer::OnRxPtyRequest(int id, SSHPtyRequestPacket* packet)
 bool SSHTransportServer::OnRxSubsystemRequest(int id, SSHSubsystemRequestPacket* packet)
 {
 	//Excessively long type length? ignore rest of the packet
-	int typelen = packet->GetNameLength();
+	uint32_t typelen = packet->GetNameLength();
 	if(typelen > 256)
 		return false;
 
@@ -1617,14 +1653,21 @@ bool SSHTransportServer::IsPacketReady(SSHConnectionState& state)
 
 	uint32_t reallen = __builtin_bswap32(*reinterpret_cast<uint32_t*>(data));
 
-	uint32_t actualPacketSize = 4 + reallen; //extra 4 bytes for the length field itself
+	//Packet claims to be bigger than our buffer! We can't possibly receive it, drop the connection
+	if(reallen > SSH_RX_BUFFER_SIZE)
+	{
+		int nstate = &state - m_state;
+		DropConnection(nstate, state.m_socket);
+		return false;
+	}
+
+	uint32_t actualPacketSize = 4 + reallen;	//extra 4 bytes for the length field itself, plus padding
+
+	//Encrypted packets have extra baggage
 	if(state.m_state >= SSHConnectionState::STATE_UNAUTHENTICATED)
 		actualPacketSize += GCM_TAG_SIZE;	//need to make sure we have space for the MAC too
-
 	if(available >= actualPacketSize)
 		return true;
-
-	//TODO: don't wait forever if client sends a packet bigger than our buffer
 
 	return false;
 }

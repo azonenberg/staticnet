@@ -52,7 +52,7 @@ public:
 
 	uint32_t GetNameListLength(uint8_t* start);
 	char* GetNameListData(uint8_t* start);
-	uint8_t* GetNextNameListStart(uint8_t* start);
+	uint8_t* GetNextNameListStart(uint8_t* start, uint8_t* end);
 
 	bool NameListContains(uint8_t* start, const char* search, uint16_t end);
 	void SetNameList(uint8_t* start, const char* str);

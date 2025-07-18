@@ -245,8 +245,8 @@ protected:
 	void OnRxUserAuthRequest(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
 	void OnRxAuthTypeQuery(int id, TCPTableEntry* socket);
 	void OnRxAuthFail(int id, TCPTableEntry* socket);
-	void OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSHUserAuthRequestPacket* packet);
-	void OnRxAuthTypePubkey(int id, TCPTableEntry* socket, SSHUserAuthRequestPacket* packet);
+	void OnRxAuthTypePassword(int id, TCPTableEntry* socket, SSHUserAuthRequestPacket* packet, SSHTransportPacket* tpack);
+	void OnRxAuthTypePubkey(int id, TCPTableEntry* socket, SSHUserAuthRequestPacket* packet, SSHTransportPacket* tpack);
 	void OnRxAuthSuccess(int id, const char* username, int16_t usernamelen, TCPTableEntry* socket);
 	void OnRxChannelOpen(int id, TCPTableEntry* socket, SSHTransportPacket* packet);
 	void OnRxChannelOpenSession(int id, TCPTableEntry* socket, SSHSessionRequestPacket* packet);
